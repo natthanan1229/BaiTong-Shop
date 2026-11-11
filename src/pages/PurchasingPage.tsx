@@ -14,6 +14,7 @@ import { Product, CartItem, AuthSession } from '../types';
 import { store } from '../services/store';
 import { playBeep } from '../utils/audio';
 import { ImageSlot } from '../components/ImageSlot';
+import { ProductQRCodeSection } from '../components/ProductQRCodeSection';
 
 interface PurchasingPageProps {
   session: AuthSession;
@@ -273,6 +274,12 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* QR Code Catalog for each product item */}
+      <ProductQRCodeSection
+        products={products}
+        onScanItem={handleScanBarcode}
+      />
 
       {/* Scanned Items Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">

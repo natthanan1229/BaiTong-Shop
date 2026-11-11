@@ -1,0 +1,158 @@
+import React, { useState, useEffect } from 'react';
+import { AuthSession, Product, PurchaseRecord, SaleRecord, ExpenseRecord } from './types';
+import { store } from './services/store';
+import { Header } from './components/Header';
+import { LoginRegisterPage } from './pages/LoginRegisterPage';
+import { ProgrammeMenu } from './pages/ProgrammeMenu';
+import { InventoryPage } from './pages/InventoryPage';
+import { PurchasingPage } from './pages/PurchasingPage';
+import { PurchaseSummaryPage } from './pages/PurchaseSummaryPage';
+import { SalesPosPage } from './pages/SalesPosPage';
+import { SalesSummaryPage } from './pages/SalesSummaryPage';
+import { IncomeExpensePage } from './pages/IncomeExpensePage';
+import { ProfitLossPage } from './pages/ProfitLossPage';
+import { FormulaSettingsModal } from './pages/FormulaSettingsModal';
+
+export const App: React.FC = () => {
+  const [session, setSession] = useState<AuthSession>(() => store.getAuthSession());
+  const [currentPage, setCurrentPage] = useState<string>('programme');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
+  const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const refreshData = () => {
+    setProducts(store.getProducts());
+    setPurchases(store.getPurchases());
+    setSales(store.getSales());
+    setExpenses(store.getExpenses());
+  };
+
+  useEffect(() => {
+    refreshData();
+  }, [session]);
+
+  const handleLoginSuccess = (newSession: AuthSession) => {
+    setSession(newSession);
+    setCurrentPage('programme');
+    refreshData();
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('คุณต้องการออกจากระบบหรือไม่?')) {
+      store.logout();
+      setSession({ role: null });
+      setCurrentPage('programme');
+    }
+  };
+
+  // If not logged in, show Login & Registration Page with Banner
+  if (!session.role) {
+    return <LoginRegisterPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
+      <div>
+        <Header
+          session={session}
+          currentPage={currentPage}
+          onNavigate={(page) => setCurrentPage(page)}
+          onLogout={handleLogout}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+
+        <main className="max-w-7xl mx-auto px-4 py-6">
+          {currentPage === 'programme' && (
+            <ProgrammeMenu
+              session={session}
+              products={products}
+              purchases={purchases}
+              sales={sales}
+              onNavigate={(page) => setCurrentPage(page)}
+            />
+          )}
+
+          {currentPage === 'inventory' && (
+            <InventoryPage
+              session={session}
+              products={products}
+              onRefresh={refreshData}
+            />
+          )}
+
+          {currentPage === 'purchasing' && (
+            <PurchasingPage
+              session={session}
+              products={products}
+              onRefresh={refreshData}
+              onNavigate={(page) => setCurrentPage(page)}
+            />
+          )}
+
+          {currentPage === 'purchase-summary' && (
+            <PurchaseSummaryPage
+              purchases={purchases}
+            />
+          )}
+
+          {currentPage === 'pos' && (
+            <SalesPosPage
+              session={session}
+              products={products}
+              onRefresh={refreshData}
+              onNavigate={(page) => setCurrentPage(page)}
+            />
+          )}
+
+          {currentPage === 'sales-summary' && (
+            <SalesSummaryPage
+              sales={sales}
+            />
+          )}
+
+          {currentPage === 'income-expense' && (
+            <IncomeExpensePage
+              sales={sales}
+              purchases={purchases}
+              expenses={expenses}
+              onRefresh={refreshData}
+            />
+          )}
+
+          {currentPage === 'profit-loss' && (
+            <ProfitLossPage
+              sales={sales}
+              purchases={purchases}
+              expenses={expenses}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Settings Modal (for Admin) */}
+      {isSettingsOpen && (
+        <FormulaSettingsModal
+          onClose={() => setIsSettingsOpen(false)}
+          onRefresh={refreshData}
+        />
+      )}
+
+      {/* Global Footer */}
+      <footer className="bg-white border-t border-slate-200 py-4 px-4 text-center text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-700">BaiTong Shop</span>
+            <span className="text-slate-300">|</span>
+            <span>ระบบร้านอุปกรณ์เครื่องเขียน</span>
+          </div>
+          <div className="text-[11px] text-slate-400">
+            โครงสร้างตารางและสูตรอ้างอิงจากไฟล์ Excel: ร้านอุปกรณ์เครื่องเขียน.xlsx
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+export default App;

@@ -1,0 +1,34 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Production build
+dist
+dist-ssr
+*.local
+
+# Editor & OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary parsing scripts & dumps
+excel_raw/
+excel_extracted/
+excel_dump.txt
+all_sheets.txt
+sheets_data.json
+parse_excel.js
+parse_excel_full.js
+dump_all_sheets.js
+inspect_summary.js
+export_sheets.js
+setup_images.cjs
+create_gallery.js

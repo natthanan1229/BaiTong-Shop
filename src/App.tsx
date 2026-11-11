@@ -12,6 +12,7 @@ import { SalesSummaryPage } from './pages/SalesSummaryPage';
 import { IncomeExpensePage } from './pages/IncomeExpensePage';
 import { ProfitLossPage } from './pages/ProfitLossPage';
 import { FormulaSettingsModal } from './pages/FormulaSettingsModal';
+import { MemberManagementPage } from './pages/MemberManagementPage';
 
 export const App: React.FC = () => {
   const [session, setSession] = useState<AuthSession>(() => store.getAuthSession());
@@ -126,6 +127,13 @@ export const App: React.FC = () => {
               sales={sales}
               purchases={purchases}
               expenses={expenses}
+            />
+          )}
+
+          {currentPage === 'members' && (
+            <MemberManagementPage
+              session={session}
+              onRefresh={refreshData}
             />
           )}
         </main>

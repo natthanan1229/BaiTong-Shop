@@ -64,6 +64,8 @@ export interface RegisteredUser {
   phone: string;         // 10 digits
   email: string;
   registeredAt: string;
+  status?: 'active' | 'suspended';
+  note?: string;
 }
 
 export interface AuthSession {

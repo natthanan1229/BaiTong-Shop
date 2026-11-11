@@ -178,12 +178,40 @@ class StoreService {
   // ------------------ USERS ------------------
   getUsers(): RegisteredUser[] {
     const data = localStorage.getItem(STORAGE_KEYS.USERS);
-    if (!data) return [];
+    if (!data) {
+      // Provide initial sample users if none exist
+      const sampleUsers: RegisteredUser[] = [
+        {
+          userId: 'BT-10229',
+          fullName: 'สมชาย ใจดี',
+          phone: '0812345678',
+          email: 'somchai@email.com',
+          registeredAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+          status: 'active',
+          note: 'สมาชิกประจำร้าน แผนกจัดซื้อ',
+        },
+        {
+          userId: 'BT-85943',
+          fullName: 'ใจดี ใจดำ',
+          phone: '0899887766',
+          email: 'jaidee@email.com',
+          registeredAt: new Date(Date.now() - 86400000 * 1).toISOString(),
+          status: 'active',
+          note: 'เจ้าหน้าที่คลังสินค้า',
+        }
+      ];
+      this.saveUsers(sampleUsers);
+      return sampleUsers;
+    }
     try {
       return JSON.parse(data);
     } catch {
       return [];
     }
+  }
+
+  saveUsers(users: RegisteredUser[]): void {
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
   registerUser(userData: Omit<RegisteredUser, 'registeredAt'>): RegisteredUser {
@@ -195,11 +223,52 @@ class StoreService {
     }
     const newUser: RegisteredUser = {
       ...userData,
+      status: userData.status || 'active',
       registeredAt: new Date().toISOString(),
     };
     const updated = [newUser, ...users];
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updated));
+    this.saveUsers(updated);
     return newUser;
+  }
+
+  addUser(userData: Omit<RegisteredUser, 'registeredAt'> & { registeredAt?: string }): RegisteredUser {
+    const users = this.getUsers();
+    const existingId = users.find(u => u.userId.toUpperCase() === userData.userId.toUpperCase());
+    if (existingId) {
+      throw new Error(`รหัสผู้ใช้งาน ${userData.userId} มีอยู่ในระบบแล้ว`);
+    }
+    const existingEmail = users.find(u => u.email.toLowerCase() === userData.email.toLowerCase());
+    if (existingEmail) {
+      throw new Error(`อีเมล ${userData.email} มีอยู่ในระบบแล้ว`);
+    }
+
+    const newUser: RegisteredUser = {
+      ...userData,
+      status: userData.status || 'active',
+      registeredAt: userData.registeredAt || new Date().toISOString(),
+    };
+    const updated = [newUser, ...users];
+    this.saveUsers(updated);
+    return newUser;
+  }
+
+  updateUser(updatedUser: RegisteredUser): void {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.userId.toUpperCase() === updatedUser.userId.toUpperCase());
+    if (idx !== -1) {
+      users[idx] = {
+        ...users[idx],
+        ...updatedUser,
+      };
+      this.saveUsers(users);
+    } else {
+      throw new Error(`ไม่พบสมาชิกที่มีรหัสผู้ใช้งาน ${updatedUser.userId}`);
+    }
+  }
+
+  deleteUser(userId: string): void {
+    const users = this.getUsers().filter(u => u.userId.toUpperCase() !== userId.toUpperCase());
+    this.saveUsers(users);
   }
 
   findUser(email: string, userId: string): RegisteredUser | null {

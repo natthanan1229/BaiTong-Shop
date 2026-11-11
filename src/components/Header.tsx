@@ -11,7 +11,8 @@ import {
   LogOut, 
   User as UserIcon, 
   ShieldCheck,
-  Home
+  Home,
+  Users
 } from 'lucide-react';
 import { AuthSession } from '../types';
 
@@ -41,6 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'sales-summary', label: '5. สรุปยอดขาย', icon: TrendingUp },
     { id: 'income-expense', label: '6. รายได้-ค่าใช้จ่าย', icon: BarChart3 },
     { id: 'profit-loss', label: '7. งบกำไรขาดทุน', icon: TrendingUp },
+    ...(isAdmin ? [{ id: 'members', label: '👥 จัดการสมาชิก', icon: Users }] : []),
   ];
 
   return (
@@ -61,6 +63,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <ShieldCheck className="w-3.5 h-3.5" />
                   ADMIN (ระบบหลังบ้าน)
                 </span>
+                <button
+                  onClick={() => onNavigate('members')}
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-medium text-xs transition border ${
+                    currentPage === 'members'
+                      ? 'bg-[#8d6e63] text-white border-[#8d6e63]'
+                      : 'bg-white/90 hover:bg-white text-[#4e342e] border-[#8d6e63]/30'
+                  }`}
+                  title="จัดการสมาชิกและผู้ใช้งาน"
+                >
+                  <Users className="w-3 h-3 text-[#8d6e63]" />
+                  <span>จัดการสมาชิก</span>
+                </button>
                 <button
                   onClick={onOpenSettings}
                   className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/90 hover:bg-white text-[#4e342e] font-medium text-xs transition border border-[#8d6e63]/30"

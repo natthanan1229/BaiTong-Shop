@@ -10,7 +10,8 @@ import {
   AlertTriangle,
   Boxes,
   BadgePercent,
-  Calendar
+  Calendar,
+  Users
 } from 'lucide-react';
 import { Product, PurchaseRecord, SaleRecord, AuthSession } from '../types';
 
@@ -134,6 +135,19 @@ export const ProgrammeMenu: React.FC<ProgrammeMenuProps> = ({
       borderColor: 'border-rose-200',
       iconBg: 'bg-[#8d6e63] text-white',
     },
+    ...(isAdmin ? [{
+      id: 'members',
+      number: 'Admin',
+      title: 'ระบบจัดการสมาชิก',
+      subTitle: 'Member Management',
+      desc: 'แอดมินสามารถจัดการ เพิ่ม แก้ไข เปลี่ยนรหัสผู้ใช้งาน และลบข้อมูลสมาชิกผู้ใช้งานในระบบได้ทั้งหมด',
+      icon: Users,
+      badge: 'จัดการผู้ใช้งาน',
+      badgeColor: 'bg-amber-100 text-amber-800',
+      color: 'from-amber-50 to-white',
+      borderColor: 'border-amber-200',
+      iconBg: 'bg-[#8d6e63] text-white',
+    }] : []),
   ];
 
   return (

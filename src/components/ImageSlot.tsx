@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image as ImageIcon, Upload, Folder, CheckCircle } from 'lucide-react';
+import { Upload, Folder, CheckCircle, Sparkles, Building2 } from 'lucide-react';
 
 interface ImageSlotProps {
   pageTitle: string;
@@ -28,25 +28,26 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   };
 
   return (
-    <div className="mb-6 bg-white rounded-xl shadow-sm border border-[#b2dfdb] overflow-hidden transition-all">
-      <div className="p-4 bg-gradient-to-r from-[#b2dfdb]/40 via-[#d0f8ce]/30 to-transparent flex flex-wrap items-center justify-between gap-3 border-b border-[#b2dfdb]/60">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-[#8d6e63] text-white rounded-lg shadow-sm">
-            <ImageIcon className="w-5 h-5" />
+    <div className="mb-6 bg-white rounded-2xl shadow-sm border border-[#b2dfdb] overflow-hidden transition-all">
+      {/* Top Controls Bar */}
+      <div className="p-3.5 bg-gradient-to-r from-[#b2dfdb]/40 via-[#d0f8ce]/30 to-slate-50 flex flex-wrap items-center justify-between gap-3 border-b border-[#b2dfdb]/60">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-[#8d6e63] text-white rounded-xl shadow-xs">
+            <Building2 className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="font-semibold text-[#4e342e] text-sm md:text-base">
+            <h3 className="font-bold text-[#4e342e] text-xs sm:text-sm">
               ช่องใส่รูปภาพประจำหน้า: {pageTitle}
             </h3>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
-              <Folder className="w-3.5 h-3.5 text-[#8d6e63]" />
-              โฟลเดอร์จัดเก็บ: <code className="bg-[#b2dfdb]/30 text-[#00796b] px-1.5 py-0.5 rounded font-mono text-xs">{folderPath}</code>
+            <p className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
+              <Folder className="w-3 h-3 text-[#8d6e63]" />
+              โฟลเดอร์จัดเก็บ: <code className="bg-[#b2dfdb]/40 text-[#00796b] px-1.5 py-0.5 rounded font-bold">{folderPath}</code>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8d6e63] hover:bg-[#5d4037] text-white text-xs font-medium rounded-lg shadow-sm transition-colors">
+          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8d6e63] hover:bg-[#5d4037] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors active:scale-[0.98]">
             <Upload className="w-3.5 h-3.5" />
             <span>เปลี่ยน / อัปโหลดรูปภาพ</span>
             <input 
@@ -57,8 +58,9 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
             />
           </label>
           <button
+            type="button"
             onClick={() => setShowFolderInfo(!showFolderInfo)}
-            className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-600 text-xs border border-slate-200 rounded-lg transition-colors"
+            className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200 rounded-lg transition-colors"
           >
             {showFolderInfo ? 'ซ่อนข้อมูลโฟลเดอร์' : 'ดูข้อมูลโฟลเดอร์'}
           </button>
@@ -66,27 +68,43 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
       </div>
 
       {showFolderInfo && (
-        <div className="p-3 bg-[#e0f2f1]/60 border-b border-[#b2dfdb]/40 text-xs text-slate-700 space-y-1">
-          <p className="font-medium text-[#00796b]">📂 รายละเอียดตำแหน่งโฟลเดอร์สำหรับหน้านี้:</p>
-          <p>• โฟลเดอร์ทางกายภาพในโปรเจกต์: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">{folderPath}</code></p>
-          <p>• ภาพเริ่มต้นจากไฟล์ Excel: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">{defaultImagePath}</code></p>
-          <p className="text-slate-500">สามารถนำไฟล์รูปภาพมาวางในโฟลเดอร์นี้เพื่อแสดงผล หรือใช้ปุ่มอัปโหลดด้านบน</p>
+        <div className="p-3.5 bg-[#e0f2f1]/70 border-b border-[#b2dfdb]/50 text-xs text-slate-700 space-y-1">
+          <p className="font-bold text-[#00796b]">📂 ตำแหน่งโฟลเดอร์จัดเก็บภาพประจำหน้านี้:</p>
+          <p>• โฟลเดอร์ทางกายภาพในโปรเจกต์: <code className="font-mono bg-white px-2 py-0.5 rounded border border-slate-300 font-bold">{folderPath}</code></p>
+          <p>• ภาพทางการเริ่มต้น: <code className="font-mono bg-white px-2 py-0.5 rounded border border-slate-300 font-bold">{defaultImagePath}</code></p>
+          <p className="text-[11px] text-slate-500">สามารถนำรูปภาพสไตล์ร้านเครื่องเขียนทางการมาวางในโฟลเดอร์นี้เพื่อแสดงผลแทนได้ทันที</p>
         </div>
       )}
 
-      {/* Image Banner Display Area */}
-      <div className="relative bg-gradient-to-b from-slate-100 to-slate-50 min-h-[140px] max-h-[220px] flex items-center justify-center overflow-hidden group">
+      {/* Formal Executive Banner Display with Dark Ambient Overlay & Typography */}
+      <div className="relative h-44 sm:h-52 w-full overflow-hidden bg-slate-900 group">
         <img
           src={currentImage}
           alt={altText}
-          className="w-full h-full object-cover max-h-[220px] transition-transform duration-300 group-hover:scale-[1.01]"
+          className="w-full h-full object-cover object-center brightness-90 group-hover:scale-105 transition-transform duration-700 ease-out"
           onError={(e) => {
-            // Fallback placeholder if image not found
-            (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200" viewBox="0 0 800 200"><rect fill="%23b2dfdb" width="800" height="200"/><text fill="%238d6e63" font-family="sans-serif" font-size="20" x="50%" y="50%" text-anchor="middle">ช่องว่างสำหรับรูปภาพ (' + encodeURIComponent(folderPath) + ')</text></svg>';
+            (e.target as HTMLImageElement).src = '/images/login/formal_stationery_landscape.jpg';
           }}
         />
+
+        {/* Executive Gradient Overlay: dark to transparent */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-900/60 to-transparent flex flex-col justify-end p-5 sm:p-7 text-white">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-[11px] font-semibold text-[#d0f8ce] border border-white/20 w-fit mb-2 shadow-sm">
+            <Sparkles className="w-3 h-3 text-[#b2dfdb]" />
+            <span>BaiTong Official Stationery & Office Supplies</span>
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white drop-shadow-md">
+            {pageTitle}
+          </h2>
+
+          <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl font-light drop-shadow">
+            ร้านใบตองอุปกรณ์เครื่องเขียน | ระบบบันทึกและจัดการระดับมาตรฐานทางการ
+          </p>
+        </div>
+
         {isUploaded && (
-          <div className="absolute top-2 right-2 bg-emerald-600/90 text-white px-2 py-1 rounded text-xs flex items-center gap-1 shadow">
+          <div className="absolute top-3 right-3 bg-emerald-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-md">
             <CheckCircle className="w-3.5 h-3.5" />
             <span>อัปโหลดรูปภาพใหม่เรียบร้อย</span>
           </div>

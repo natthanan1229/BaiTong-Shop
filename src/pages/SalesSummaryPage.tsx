@@ -99,7 +99,7 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
       <ImageSlot
         pageTitle="5. ระบบสรุปยอดขายสินค้า (Total Sales Summary)"
         folderPath="public/images/sales-summary/"
-        defaultImagePath="/images/sales-summary/header.jpeg"
+        defaultImagePath="/images/sales-summary/formal_banner.jpg"
         altText="ภาพหัวข้อสรุปยอดขายสินค้า"
       />
 

@@ -152,7 +152,7 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
       <ImageSlot
         pageTitle="2. ระบบซื้อสินค้า (Purchasing System)"
         folderPath="public/images/purchasing/"
-        defaultImagePath="/images/purchasing/header.png"
+        defaultImagePath="/images/purchasing/formal_banner.jpg"
         altText="ภาพหัวข้อระบบซื้อสินค้า"
       />
 

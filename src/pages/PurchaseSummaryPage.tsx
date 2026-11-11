@@ -97,7 +97,7 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({ purcha
       <ImageSlot
         pageTitle="3. ระบบสรุปยอดซื้อสินค้า (Total Purchase Summary)"
         folderPath="public/images/purchase-summary/"
-        defaultImagePath="/images/purchase-summary/header.png"
+        defaultImagePath="/images/purchase-summary/formal_banner.jpg"
         altText="ภาพหัวข้อสรุปยอดซื้อสินค้า"
       />
 

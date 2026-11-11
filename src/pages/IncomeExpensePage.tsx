@@ -146,7 +146,7 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
       <ImageSlot
         pageTitle="6. สรุปยอดรายได้ค่าใช้จ่าย (Daily Income & Expenses)"
         folderPath="public/images/income-expense/"
-        defaultImagePath="/images/income-expense/header.jpeg"
+        defaultImagePath="/images/income-expense/formal_banner.jpg"
         altText="ภาพหัวข้อรายได้ค่าใช้จ่าย"
       />
 

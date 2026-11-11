@@ -191,7 +191,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
       <ImageSlot
         pageTitle="1. ระบบคลังสินค้า (Inventory Management)"
         folderPath="public/images/inventory/"
-        defaultImagePath="/images/inventory/header.jpeg"
+        defaultImagePath="/images/inventory/formal_banner.jpg"
         altText="ภาพหัวข้อระบบคลังสินค้า"
       />
 

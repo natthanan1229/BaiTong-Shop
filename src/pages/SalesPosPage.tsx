@@ -181,7 +181,7 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
       <ImageSlot
         pageTitle="4. ระบบขายสินค้า (Sales POS System)"
         folderPath="public/images/pos/"
-        defaultImagePath="/images/pos/header.png"
+        defaultImagePath="/images/pos/formal_banner.jpg"
         altText="ภาพหัวข้อระบบขายสินค้า"
       />
 

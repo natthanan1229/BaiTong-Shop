@@ -109,7 +109,7 @@ export const ProfitLossPage: React.FC<ProfitLossPageProps> = ({
       <ImageSlot
         pageTitle="7. งบกำไรขาดทุน (Monthly Expense Summary)"
         folderPath="public/images/profit-loss/"
-        defaultImagePath="/images/profit-loss/header.jpeg"
+        defaultImagePath="/images/profit-loss/formal_banner.jpg"
         altText="ภาพหัวข้องบกำไรขาดทุน"
       />
 

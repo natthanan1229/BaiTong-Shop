@@ -6,7 +6,6 @@ import {
   LogIn, 
   AlertCircle, 
   Mail, 
-  Info, 
   Building2, 
   Lock,
   Key
@@ -47,14 +46,8 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
       store.setAuthSession(session);
       onLoginSuccess(session);
     } else {
-      setAdminError('ชื่อผู้ใช้หรือรหัสผ่านแอดมินไม่ถูกต้อง (กำหนด: ADMIN / 1229)');
+      setAdminError('ชื่อผู้ใช้หรือรหัสผ่านแอดมินไม่ถูกต้อง');
     }
-  };
-
-  const handleFillAdminDemo = () => {
-    setAdminUsername('ADMIN');
-    setAdminPassword('1229');
-    setAdminError('');
   };
 
   // Handle User Login
@@ -229,16 +222,6 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
                   </p>
                 </div>
 
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
-                  <Info className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                  <div>
-                    <span className="font-semibold">ข้อกำหนดการเข้าใช้งานระบบแอดมิน:</span>
-                    <br />
-                    ผู้ใช้: <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-slate-800">ADMIN</code> | 
-                    รหัสผ่าน: <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-slate-800">1229</code>
-                  </div>
-                </div>
-
                 {adminError && (
                   <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
@@ -257,7 +240,7 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
                         type="text"
                         value={adminUsername}
                         onChange={(e) => setAdminUsername(e.target.value)}
-                        placeholder="ADMIN"
+                        placeholder="กรอกชื่อผู้ใช้แอดมิน"
                         className="w-full pl-10 pr-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#8d6e63]/40 focus:border-[#8d6e63] outline-none transition bg-white"
                         required
                       />
@@ -274,29 +257,20 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
                         type="password"
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
-                        placeholder="1229"
+                        placeholder="••••••••"
                         className="w-full pl-10 pr-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#8d6e63]/40 focus:border-[#8d6e63] outline-none transition bg-white"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="flex gap-2 pt-1">
+                  <div className="pt-1">
                     <button
                       type="submit"
-                      className="flex-1 py-3 px-4 bg-[#8d6e63] hover:bg-[#5d4037] text-white font-semibold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 active:scale-[0.99]"
+                      className="w-full py-3 px-4 bg-[#8d6e63] hover:bg-[#5d4037] text-white font-semibold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 active:scale-[0.99]"
                     >
                       <ShieldCheck className="w-4 h-4" />
                       <span>เข้าสู่ระบบแอดมิน</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleFillAdminDemo}
-                      className="py-3 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition border border-slate-200"
-                      title="กรอกข้อมูล ADMIN อัตโนมัติ"
-                    >
-                      เติม ADMIN/1229
                     </button>
                   </div>
                 </form>

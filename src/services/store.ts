@@ -124,6 +124,21 @@ class StoreService {
     INITIAL_PRODUCTS.forEach(p => supabaseService.saveInventoryItem(p).catch(() => {}));
   }
 
+  async syncAllInventoryToSupabase(): Promise<{ total: number; successCount: number; errors: string[] }> {
+    const products = this.getProducts();
+    let successCount = 0;
+    const errors: string[] = [];
+    for (const p of products) {
+      const ok = await supabaseService.saveInventoryItem(p);
+      if (ok) {
+        successCount++;
+      } else {
+        errors.push(`${p.name} (${p.barcode})`);
+      }
+    }
+    return { total: products.length, successCount, errors };
+  }
+
   // ------------------ PURCHASES ------------------
   getPurchases(): PurchaseRecord[] {
     const data = localStorage.getItem(STORAGE_KEYS.PURCHASES);

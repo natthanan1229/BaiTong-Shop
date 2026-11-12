@@ -252,19 +252,32 @@ export class SupabaseService {
       // Analyze expenses based on purchases and inventory stock cost
       const totalInventoryCost = products.reduce((sum, p) => sum + (p.stockQty * p.costPrice), 0);
       const totalPurchased = purchases.reduce((sum, p) => sum + p.netTotal, 0);
+      const amount = Math.round(totalPurchased > 0 ? totalPurchased : totalInventoryCost);
 
-      const expenseRecord: SummaryExpenseRow = {
-        Ex_Purch: totalPurchased > 0 ? totalPurchased : totalInventoryCost,
+      const expenseRecordWithDate: any = {
+        Ex_Purch: amount,
         Ex_List: `วิเคราะห์ค่าใช้จ่ายยอดซื้อสินค้าคลัง: สินค้า ${products.length} รายการ`,
         Ex_Date: new Date().toISOString().slice(0, 10),
       };
 
-      const { error } = await supabase
+      const res1 = await supabase
         .from('Summary_Expans_TB')
-        .insert(expenseRecord);
+        .insert(expenseRecordWithDate);
 
-      if (error) {
-        console.warn('Supabase syncExpenseFromInventory warning:', error.message);
+      if (res1.error && res1.error.message && res1.error.message.includes('Ex_Date')) {
+        // Fallback if Ex_Date column does not exist in schema
+        const expenseRecordNoDate: any = {
+          Ex_Purch: amount,
+          Ex_List: `วิเคราะห์ค่าใช้จ่ายยอดซื้อสินค้าคลัง: สินค้า ${products.length} รายการ`,
+        };
+        const res2 = await supabase
+          .from('Summary_Expans_TB')
+          .insert(expenseRecordNoDate);
+        return !res2.error;
+      }
+
+      if (res1.error) {
+        console.warn('Supabase syncExpenseFromInventory warning:', res1.error.message);
         return false;
       }
       return true;

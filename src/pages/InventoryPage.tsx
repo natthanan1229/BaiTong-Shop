@@ -8,10 +8,15 @@ import {
   AlertTriangle, 
   CheckCircle, 
   Download, 
-  RotateCcw,
-  SlidersHorizontal,
-  X,
-  Database
+  RotateCcw, 
+  SlidersHorizontal, 
+  X, 
+  Database,
+  Zap,
+  RefreshCw,
+  AlertCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { Product, AuthSession } from '../types';
 import { store } from '../services/store';
@@ -45,6 +50,53 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
   const [formStockQty, setFormStockQty] = useState<number>(0);
   const [formCategory, setFormCategory] = useState('อุปกรณ์ทั่วไป');
   const [formError, setFormError] = useState('');
+
+  // Supabase sync state
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [showRlsHelp, setShowRlsHelp] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const handleSyncToSupabase = async () => {
+    setIsSyncingSupabase(true);
+    setSyncFeedback(null);
+    try {
+      const res = await store.syncAllInventoryToSupabase();
+      if (res.successCount === res.total && res.total > 0) {
+        setSyncFeedback({
+          text: `ส่งข้อมูลสินค้าทั้งหมด ${res.successCount}/${res.total} รายการ เข้าตาราง Inventory_TB บน Supabase เรียบร้อยแล้ว!`,
+          type: 'success'
+        });
+        setShowRlsHelp(false);
+      } else if (res.successCount > 0) {
+        setSyncFeedback({
+          text: `ซิงค์สำเร็จ ${res.successCount}/${res.total} รายการ (พบข้อผิดพลาดบางส่วน)`,
+          type: 'error'
+        });
+      } else {
+        setSyncFeedback({
+          text: `ไม่สามารถส่งข้อมูลได้: ติดระบบความปลอดภัย RLS ของ Supabase บนตาราง Inventory_TB`,
+          type: 'error'
+        });
+        setShowRlsHelp(true);
+      }
+    } catch (err: any) {
+      setSyncFeedback({
+        text: `เกิดข้อผิดพลาดในการซิงค์: ${err.message}`,
+        type: 'error'
+      });
+      setShowRlsHelp(true);
+    } finally {
+      setIsSyncingSupabase(false);
+    }
+  };
+
+  const handleCopyRlsSql = () => {
+    const sql = `ALTER TABLE "Employee_TB" DISABLE ROW LEVEL SECURITY;\nALTER TABLE "Inventory_TB" DISABLE ROW LEVEL SECURITY;\nALTER TABLE "Summary_Expans_TB" DISABLE ROW LEVEL SECURITY;\nALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`;
+    navigator.clipboard.writeText(sql);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2500);
+  };
 
   const openAddModal = () => {
     setEditingProduct(null);
@@ -221,6 +273,22 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
             <button
+              onClick={handleSyncToSupabase}
+              disabled={isSyncingSupabase}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white rounded-lg text-xs font-semibold shadow-xs transition disabled:opacity-50"
+              title="ส่งข้อมูลสินค้าทั้งหมด 30 รายการเข้าตาราง Inventory_TB บน Supabase"
+            >
+              {isSyncingSupabase ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-200" />
+              ) : (
+                <Zap className="w-3.5 h-3.5 text-amber-300" />
+              )}
+              <span>{isSyncingSupabase ? 'กำลังส่งข้อมูล...' : '⚡ ซิงค์เข้า Supabase (Inventory_TB)'}</span>
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
               onClick={openAddModal}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#8d6e63] hover:bg-[#5d4037] text-white rounded-lg text-xs font-semibold shadow-xs transition"
             >
@@ -250,6 +318,65 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
           )}
         </div>
       </div>
+
+      {/* Sync Feedback Alert */}
+      {syncFeedback && (
+        <div className={`p-3.5 rounded-xl text-xs font-medium flex items-center justify-between shadow-xs transition-all ${
+          syncFeedback.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' 
+            : 'bg-rose-50 text-rose-800 border border-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {syncFeedback.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{syncFeedback.text}</span>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setSyncFeedback(null)}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Supabase RLS Help if blocked */}
+      {showRlsHelp && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl space-y-2 text-xs text-amber-900">
+          <div className="flex items-center justify-between font-bold">
+            <span className="flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              วิธีปลดล็อกสิทธิ์บันทึกตาราง Inventory_TB ใน Supabase
+            </span>
+            <button onClick={() => setShowRlsHelp(false)} className="text-amber-500 hover:text-amber-800">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-[11px] text-amber-800">
+            เปิด <strong>SQL Editor</strong> ใน Supabase แล้ววางคำสั่งนี้แล้วกด <strong>RUN</strong>:
+          </p>
+          <div className="relative">
+            <pre className="text-[10px] bg-slate-900 text-emerald-300 p-2 rounded-lg font-mono overflow-x-auto leading-tight">
+{`ALTER TABLE "Employee_TB" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "Inventory_TB" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "Summary_Expans_TB" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
+            </pre>
+            <button
+              type="button"
+              onClick={handleCopyRlsSql}
+              className="absolute right-2 top-2 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded flex items-center gap-1 shadow-sm"
+            >
+              {copiedSql ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              <span>{copiedSql ? 'คัดลอกแล้ว!' : 'คัดลอก SQL'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">

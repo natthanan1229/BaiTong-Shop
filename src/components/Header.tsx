@@ -40,9 +40,11 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'purchase-summary', label: '3. สรุปยอดซื้อ', icon: FileText },
     { id: 'pos', label: '4. ขายสินค้า (POS)', icon: DollarSign },
     { id: 'sales-summary', label: '5. สรุปยอดขาย', icon: TrendingUp },
-    { id: 'income-expense', label: '6. รายได้-ค่าใช้จ่าย', icon: BarChart3 },
-    { id: 'profit-loss', label: '7. งบกำไรขาดทุน', icon: TrendingUp },
-    ...(isAdmin ? [{ id: 'members', label: '👥 จัดการสมาชิก', icon: Users }] : []),
+    ...(isAdmin ? [
+      { id: 'income-expense', label: '6. รายได้-ค่าใช้จ่าย', icon: BarChart3 },
+      { id: 'profit-loss', label: '7. งบกำไรขาดทุน', icon: TrendingUp },
+      { id: 'members', label: '👥 จัดการสมาชิก', icon: Users }
+    ] : []),
   ];
 
   return (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import { AuthSession, Product, PurchaseRecord, SaleRecord, ExpenseRecord } from './types';
 import { store } from './services/store';
 import { supabaseService } from './services/supabaseService';
@@ -139,20 +140,52 @@ export const App: React.FC = () => {
           )}
 
           {currentPage === 'income-expense' && (
-            <IncomeExpensePage
-              sales={sales}
-              purchases={purchases}
-              expenses={expenses}
-              onRefresh={refreshData}
-            />
+            session.role === 'admin' ? (
+              <IncomeExpensePage
+                sales={sales}
+                purchases={purchases}
+                expenses={expenses}
+                onRefresh={refreshData}
+              />
+            ) : (
+              <div className="p-8 bg-white rounded-2xl border border-rose-200 text-center max-w-lg mx-auto shadow-sm my-12 animate-in fade-in">
+                <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb-3" />
+                <h2 className="text-lg font-bold text-slate-800">เฉพาะผู้ดูแลระบบ (ADMIN) เท่านั้น</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  ผู้ใช้งานทั่วไปไม่มีสิทธิ์เข้าถึงหน้ารายได้-ค่าใช้จ่าย กรุณาเข้าสู่ระบบด้วยบัญชีแอดมิน
+                </p>
+                <button
+                  onClick={() => setCurrentPage('programme')}
+                  className="mt-4 px-4 py-2 bg-[#00796b] hover:bg-[#004d40] text-white text-xs font-semibold rounded-xl transition"
+                >
+                  กลับสู่หน้าหลัก
+                </button>
+              </div>
+            )
           )}
 
           {currentPage === 'profit-loss' && (
-            <ProfitLossPage
-              sales={sales}
-              purchases={purchases}
-              expenses={expenses}
-            />
+            session.role === 'admin' ? (
+              <ProfitLossPage
+                sales={sales}
+                purchases={purchases}
+                expenses={expenses}
+              />
+            ) : (
+              <div className="p-8 bg-white rounded-2xl border border-rose-200 text-center max-w-lg mx-auto shadow-sm my-12 animate-in fade-in">
+                <ShieldCheck className="w-12 h-12 text-rose-500 mx-auto mb-3" />
+                <h2 className="text-lg font-bold text-slate-800">เฉพาะผู้ดูแลระบบ (ADMIN) เท่านั้น</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  ผู้ใช้งานทั่วไปไม่มีสิทธิ์เข้าถึงหน้างบกำไรขาดทุน กรุณาเข้าสู่ระบบด้วยบัญชีแอดมิน
+                </p>
+                <button
+                  onClick={() => setCurrentPage('programme')}
+                  className="mt-4 px-4 py-2 bg-[#00796b] hover:bg-[#004d40] text-white text-xs font-semibold rounded-xl transition"
+                >
+                  กลับสู่หน้าหลัก
+                </button>
+              </div>
+            )
           )}
 
           {currentPage === 'members' && (

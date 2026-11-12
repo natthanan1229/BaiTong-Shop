@@ -205,11 +205,11 @@ export class SupabaseService {
     try {
       const row: EmployeeRow = {
         Em_ID: user.userId,
-        Em_User: user.userId,
+        Em_User: user.fullName || user.userId,
         Em_Name: user.fullName,
         EM_Tell: user.phone,
         EM_Email: user.email,
-        EM_date: user.registeredAt || new Date().toISOString(),
+        EM_date: (user.registeredAt || new Date().toISOString()).slice(0, 10),
         Em_Status: user.status || 'active',
       };
 

@@ -47,6 +47,7 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
   const [regGeneratedId, setRegGeneratedId] = useState(generateUserId());
   const [regErrors, setRegErrors] = useState<{ [key: string]: string }>({});
   const [registeredUserSuccess, setRegisteredUserSuccess] = useState<RegisteredUser | null>(null);
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<{ synced: boolean; error?: string } | null>(null);
   const [copiedId, setCopiedId] = useState(false);
 
   // Background image URL: 2400x1600 formal stationery landscape photograph
@@ -100,7 +101,7 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
   };
 
   // Handle User Register
-  const handleUserRegister = (e: React.FormEvent) => {
+  const handleUserRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: { [key: string]: string } = {};
 
@@ -128,7 +129,7 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
     }
 
     try {
-      const newUser = store.registerUser({
+      const regResult = await store.registerUser({
         userId: regGeneratedId,
         fullName: regFullName.trim(),
         phone: regPhone.trim(),
@@ -143,7 +144,11 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
         });
       } catch {}
 
-      setRegisteredUserSuccess(newUser);
+      setRegisteredUserSuccess(regResult.user);
+      setSupabaseSyncStatus({
+        synced: regResult.supabaseSynced,
+        error: regResult.supabaseError
+      });
       setRegErrors({});
     } catch (err: unknown) {
       const error = err as Error;
@@ -369,6 +374,20 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
                       </div>
                       <div className="text-[11px] text-slate-600">
                         • เบอร์โทร: <span className="font-semibold text-slate-800">{registeredUserSuccess.phone}</span>
+                      </div>
+                      <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500">ฐานข้อมูล Supabase:</span>
+                        {supabaseSyncStatus?.synced ? (
+                          <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            บันทึกใน Employee_TB สำเร็จ
+                          </span>
+                        ) : (
+                          <span className="text-amber-700 font-medium flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                            บันทึกในระบบแล้ว (รอเปิดสิทธิ์ RLS ใน Supabase)
+                          </span>
+                        )}
                       </div>
                     </div>
 

@@ -21,7 +21,9 @@ import {
   UserCheck,
   UserX,
   FileSpreadsheet,
-  Database
+  Database,
+  Zap,
+  HelpCircle
 } from 'lucide-react';
 import { RegisteredUser, AuthSession } from '../types';
 import { store } from '../services/store';
@@ -57,6 +59,9 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
   // Notification banner
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+  const [showRlsHelp, setShowRlsHelp] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   const refreshUserList = () => {
     const list = store.getUsers();
@@ -66,7 +71,36 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
 
   const showFeedback = (text: string, type: 'success' | 'error' = 'success') => {
     setFeedbackMessage({ text, type });
-    setTimeout(() => setFeedbackMessage(null), 3500);
+    setTimeout(() => setFeedbackMessage(null), 4500);
+  };
+
+  // Sync all members to Supabase Employee_TB
+  const handleSyncToSupabase = async () => {
+    setIsSyncingSupabase(true);
+    try {
+      const res = await store.syncAllEmployeesToSupabase();
+      if (res.successCount === res.total && res.total > 0) {
+        showFeedback(`ซิงค์ข้อมูลสมาชิกทั้งหมด ${res.successCount}/${res.total} รายการ เข้าตาราง Employee_TB ใน Supabase สำเร็จเรียบร้อย!`, 'success');
+        setShowRlsHelp(false);
+      } else if (res.successCount > 0) {
+        showFeedback(`ซิงค์สำเร็จ ${res.successCount}/${res.total} รายการ (พบข้อผิดพลาดบางรายการ)`, 'error');
+      } else {
+        showFeedback(`ไม่สามารถส่งข้อมูลได้: ติดระบบความปลอดภัย RLS ของ Supabase กรุณาเปิดสิทธิ์ RLS หรือรัน SQL ปลดล็อก`, 'error');
+        setShowRlsHelp(true);
+      }
+    } catch (err: any) {
+      showFeedback(`เกิดข้อผิดพลาดในการซิงค์: ${err.message}`, 'error');
+      setShowRlsHelp(true);
+    } finally {
+      setIsSyncingSupabase(false);
+    }
+  };
+
+  const handleCopyRlsSql = () => {
+    const sql = `ALTER TABLE "Employee_TB" DISABLE ROW LEVEL SECURITY;\nALTER TABLE "Inventory_TB" DISABLE ROW LEVEL SECURITY;\nALTER TABLE "Summary_Expans_TB" DISABLE ROW LEVEL SECURITY;\nALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`;
+    navigator.clipboard.writeText(sql);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2500);
   };
 
   // Filtered members list
@@ -112,7 +146,7 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
   };
 
   // Handle submit add/edit
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: { [key: string]: string } = {};
 
@@ -147,7 +181,7 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
     try {
       if (editingUser) {
         // Update user
-        store.updateUser({
+        const res = await store.updateUser({
           userId: formUserId.trim().toUpperCase(),
           fullName: formFullName.trim(),
           phone: formPhone.trim(),
@@ -156,10 +190,10 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
           status: formStatus,
           note: formNote.trim(),
         });
-        showFeedback(`แก้ไขข้อมูลสมาชิก "${formFullName}" สำเร็จเรียบร้อย`);
+        showFeedback(`แก้ไขข้อมูลสมาชิก "${formFullName}" สำเร็จเรียบร้อย ${res.supabaseSynced ? '(ซิงค์เข้า Supabase แล้ว)' : ''}`);
       } else {
         // Add new user
-        store.addUser({
+        const res = await store.addUser({
           userId: formUserId.trim().toUpperCase(),
           fullName: formFullName.trim(),
           phone: formPhone.trim(),
@@ -167,7 +201,7 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
           status: formStatus,
           note: formNote.trim(),
         });
-        showFeedback(`เพิ่มสมาชิกใหม่ "${formFullName}" (รหัส: ${formUserId}) สำเร็จเรียบร้อย`);
+        showFeedback(`เพิ่มสมาชิกใหม่ "${formFullName}" (รหัส: ${formUserId}) สำเร็จเรียบร้อย ${res.supabaseSynced ? '(ซิงค์เข้า Supabase แล้ว)' : ''}`);
       }
 
       setIsModalOpen(false);
@@ -285,6 +319,31 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={handleSyncToSupabase}
+            disabled={isSyncingSupabase}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white text-xs font-semibold rounded-xl shadow-xs transition disabled:opacity-50"
+            title="ส่งข้อมูลสมาชิกทั้งหมดเข้าตาราง Employee_TB บน Supabase"
+          >
+            {isSyncingSupabase ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-teal-200" />
+            ) : (
+              <Zap className="w-4 h-4 text-amber-300" />
+            )}
+            <span>{isSyncingSupabase ? 'กำลังส่งข้อมูล...' : '⚡ ซิงค์เข้า Supabase (Employee_TB)'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowRlsHelp(prev => !prev)}
+            className="inline-flex items-center gap-1 px-2.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-medium rounded-xl border border-amber-300 transition"
+            title="วิธีเปิดสิทธิ์ความปลอดภัย RLS ใน Supabase"
+          >
+            <HelpCircle className="w-4 h-4 text-amber-600" />
+            <span>คำแนะนำ Supabase RLS</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleExportCSV}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 transition"
           >
@@ -311,6 +370,68 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Supabase RLS Guidance Alert Box */}
+      {showRlsHelp && (
+        <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl shadow-sm space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <span>วิธีเปิดสิทธิ์การบันทึกข้อมูลเข้า Supabase (Row Level Security - RLS)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRlsHelp(false)}
+              className="text-amber-500 hover:text-amber-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <p className="text-xs text-amber-800 leading-relaxed">
+            สาเหตุที่ข้อมูลยังไม่เข้าตาราง <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-900">Employee_TB</code>: 
+            เนื่องจาก Supabase เปิดการป้องกัน RLS (Row Level Security) อัตโนมัติ จึงต้องปลดล็อกสิทธิ์ให้บันทึกข้อมูลได้ตาม 2 วิธีนี้:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200">
+              <div className="text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">1</span>
+                วิธีที่ 1: คลิกในหน้าตาราง Supabase (ตามรูปที่เปิดอยู่)
+              </div>
+              <p className="text-[11px] text-slate-600">
+                คลิกปุ่ม <span className="font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">+ Add RLS policy</span> ข้างปุ่ม Sort &gt; เลือกแท็บ "Enable insert access for all users" &gt; กด Save
+              </p>
+            </div>
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200">
+              <div className="text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">2</span>
+                วิธีที่ 2: รันคำสั่ง SQL ทีเดียวครบทุกตาราง (แนะนำ เร็วที่สุด)
+              </div>
+              <p className="text-[11px] text-slate-600 mb-2">
+                ไปที่เมนูด้านซ้ายของ Supabase คลิก <strong>SQL Editor</strong> (&gt;_) แล้ววางคำสั่งนี้แล้วกด <strong>Run</strong>:
+              </p>
+              <div className="relative">
+                <pre className="text-[10px] bg-slate-900 text-emerald-300 p-2 rounded-lg font-mono overflow-x-auto leading-tight">
+{`ALTER TABLE "Employee_TB" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "Inventory_TB" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "Summary_Expans_TB" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
+                </pre>
+                <button
+                  type="button"
+                  onClick={handleCopyRlsSql}
+                  className="absolute right-2 top-2 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold rounded flex items-center gap-1 shadow-sm"
+                >
+                  {copiedSql ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedSql ? 'คัดลอกแล้ว!' : 'คัดลอก SQL'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="text-[11px] text-teal-900 bg-teal-100/60 p-2.5 rounded-xl border border-teal-200 flex items-center justify-between">
+            <span>✨ เมื่อทำเสร็จแล้ว ให้กดปุ่ม <strong>"⚡ ซิงค์เข้า Supabase (Employee_TB)"</strong> ด้านบน ข้อมูลสมาชิกทั้งหมดจะวิ่งเข้าไปใน Supabase ทันที!</span>
+          </div>
+        </div>
+      )}
 
       {/* Notifications */}
       {feedbackMessage && (

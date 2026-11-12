@@ -269,7 +269,7 @@ class StoreService {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
-  registerUser(userData: Omit<RegisteredUser, 'registeredAt'>): RegisteredUser {
+  async registerUser(userData: Omit<RegisteredUser, 'registeredAt'>): Promise<{ user: RegisteredUser; supabaseSynced: boolean; supabaseError?: string }> {
     const users = this.getUsers();
     const existing = users.find(u => u.email.toLowerCase() === userData.email.toLowerCase());
     if (existing) {
@@ -284,12 +284,16 @@ class StoreService {
     this.saveUsers(updated);
 
     // Sync to Supabase Employee_TB
-    supabaseService.saveEmployee(newUser).catch(() => {});
+    const res = await supabaseService.saveEmployee(newUser);
 
-    return newUser;
+    return {
+      user: newUser,
+      supabaseSynced: res.success,
+      supabaseError: res.error,
+    };
   }
 
-  addUser(userData: Omit<RegisteredUser, 'registeredAt'> & { registeredAt?: string }): RegisteredUser {
+  async addUser(userData: Omit<RegisteredUser, 'registeredAt'> & { registeredAt?: string }): Promise<{ user: RegisteredUser; supabaseSynced: boolean; supabaseError?: string }> {
     const users = this.getUsers();
     const existingId = users.find(u => u.userId.toUpperCase() === userData.userId.toUpperCase());
     if (existingId) {
@@ -309,12 +313,16 @@ class StoreService {
     this.saveUsers(updated);
 
     // Sync to Supabase Employee_TB
-    supabaseService.saveEmployee(newUser).catch(() => {});
+    const res = await supabaseService.saveEmployee(newUser);
 
-    return newUser;
+    return {
+      user: newUser,
+      supabaseSynced: res.success,
+      supabaseError: res.error,
+    };
   }
 
-  updateUser(updatedUser: RegisteredUser): void {
+  async updateUser(updatedUser: RegisteredUser): Promise<{ success: boolean; supabaseSynced: boolean; supabaseError?: string }> {
     const users = this.getUsers();
     const idx = users.findIndex(u => u.userId.toUpperCase() === updatedUser.userId.toUpperCase());
     if (idx !== -1) {
@@ -325,10 +333,26 @@ class StoreService {
       this.saveUsers(users);
 
       // Sync to Supabase Employee_TB
-      supabaseService.saveEmployee(updatedUser).catch(() => {});
+      const res = await supabaseService.saveEmployee(updatedUser);
+      return { success: true, supabaseSynced: res.success, supabaseError: res.error };
     } else {
       throw new Error(`ไม่พบสมาชิกที่มีรหัสผู้ใช้งาน ${updatedUser.userId}`);
     }
+  }
+
+  async syncAllEmployeesToSupabase(): Promise<{ total: number; successCount: number; errors: string[] }> {
+    const users = this.getUsers();
+    let successCount = 0;
+    const errors: string[] = [];
+    for (const u of users) {
+      const res = await supabaseService.saveEmployee(u);
+      if (res.success) {
+        successCount++;
+      } else if (res.error) {
+        errors.push(`${u.fullName}: ${res.error}`);
+      }
+    }
+    return { total: users.length, successCount, errors };
   }
 
   deleteUser(userId: string): void {

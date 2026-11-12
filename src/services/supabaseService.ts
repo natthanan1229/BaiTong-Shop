@@ -201,16 +201,16 @@ export class SupabaseService {
     }
   }
 
-  async saveEmployee(user: RegisteredUser): Promise<boolean> {
+  async saveEmployee(user: RegisteredUser): Promise<{ success: boolean; error?: string }> {
     try {
       const row: EmployeeRow = {
         Em_ID: user.userId,
+        Em_User: user.userId,
         Em_Name: user.fullName,
         EM_Tell: user.phone,
         EM_Email: user.email,
         EM_date: user.registeredAt || new Date().toISOString(),
         Em_Status: user.status || 'active',
-        Em_User: user.userId,
       };
 
       const { error } = await supabase
@@ -219,12 +219,12 @@ export class SupabaseService {
 
       if (error) {
         console.warn('Supabase saveEmployee warning:', error.message);
-        return false;
+        return { success: false, error: error.message };
       }
-      return true;
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.warn('Supabase saveEmployee failed:', err);
-      return false;
+      return { success: false, error: err?.message || 'Connection error' };
     }
   }
 

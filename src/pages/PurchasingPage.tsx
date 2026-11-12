@@ -14,6 +14,8 @@ import { Product, CartItem, AuthSession } from '../types';
 import { store } from '../services/store';
 import { playBeep } from '../utils/audio';
 import { ImageSlot } from '../components/ImageSlot';
+import { supabaseService } from '../services/supabaseService';
+import { Database } from 'lucide-react';
 
 interface PurchasingPageProps {
   session: AuthSession;
@@ -33,6 +35,13 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [scanMessage, setScanMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isSuccessSaved, setIsSuccessSaved] = useState(false);
+  const [supabaseItems, setSupabaseItems] = useState<{ barcode: string; name: string; price: number }[]>([]);
+
+  React.useEffect(() => {
+    supabaseService.selectPurchasingProducts().then(items => {
+      if (items && items.length > 0) setSupabaseItems(items);
+    });
+  }, []);
 
   // Scan or add item
   const handleScanBarcode = (barcodeToScan?: string) => {
@@ -163,7 +172,13 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
             <ShoppingCart className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">2. ระบบซื้อสินค้า (Purchasing System)</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">2. ระบบซื้อสินค้า (Purchasing System)</h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#b2dfdb]/40 text-[#00796b] border border-[#b2dfdb]">
+                <Database className="w-3 h-3" />
+                Inventory_TB (SELECT In_Bar, In_Menu, In_Price)
+              </span>
+            </div>
             <p className="text-xs text-slate-500">
               สแกนบาร์โค้ดรับสินค้าเข้า แสดงผลรายการสินค้าระบุจำนวนและราคา พร้อมคำนวณราคาสุทธิ
             </p>

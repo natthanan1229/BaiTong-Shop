@@ -10,7 +10,8 @@ import {
   Download, 
   RotateCcw,
   SlidersHorizontal,
-  X
+  X,
+  Database
 } from 'lucide-react';
 import { Product, AuthSession } from '../types';
 import { store } from '../services/store';
@@ -203,7 +204,13 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-800">1. ระบบคลังสินค้า (Inventory Management)</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold text-slate-800">1. ระบบคลังสินค้า (Inventory Management)</h1>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#b2dfdb]/40 text-[#00796b] border border-[#b2dfdb]">
+                  <Database className="w-3 h-3" />
+                  ฐานข้อมูล: Inventory_TB
+                </span>
+              </div>
               <p className="text-xs text-slate-500">
                 บันทึกรับสินค้าจากยอดซื้อและบันทึกจ่ายจากยอดขาย ยอดคงเหลือไม่ตั้งเป็นศูนย์อัตโนมัติ และสามารถลบสินค้าได้
               </p>

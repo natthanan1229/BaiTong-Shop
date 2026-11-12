@@ -20,7 +20,8 @@ import {
   RefreshCw,
   UserCheck,
   UserX,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Database
 } from 'lucide-react';
 import { RegisteredUser, AuthSession } from '../types';
 import { store } from '../services/store';
@@ -269,6 +270,10 @@ export const MemberManagementPage: React.FC<MemberManagementPageProps> = ({
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#8d6e63]/15 text-[#5d4037] border border-[#8d6e63]/30">
                 ADMIN หลังบ้าน
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#b2dfdb]/40 text-[#00796b] border border-[#b2dfdb]">
+                <Database className="w-3 h-3" />
+                ฐานข้อมูล: Employee_TB
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">

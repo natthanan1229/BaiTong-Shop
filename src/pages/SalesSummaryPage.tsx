@@ -7,7 +7,8 @@ import {
   Search, 
   DollarSign, 
   Boxes, 
-  Receipt
+  Receipt,
+  Database
 } from 'lucide-react';
 import { SaleRecord } from '../types';
 import { ImageSlot } from '../components/ImageSlot';
@@ -110,7 +111,13 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
             <TrendingUp className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">5. ระบบสรุปยอดขายสินค้า (Total Sales)</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">5. ระบบสรุปยอดขายสินค้า (Total Sales)</h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                <Database className="w-3 h-3" />
+                Summary_Self_TB (SELECT เรียกดูของจาก Inventory_TB เพื่อวิเคราะห์)
+              </span>
+            </div>
             <p className="text-xs text-slate-500">
               สรุปรายการขายสินค้าของแต่ละวัน ระบุชื่อสินค้า จำนวนสินค้า ราคาสินค้า และคำนวณราคาสุทธิ
             </p>

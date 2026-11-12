@@ -31,6 +31,9 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
+    store.initSupabaseSync().then(() => {
+      refreshData();
+    });
     refreshData();
   }, [session]);
 

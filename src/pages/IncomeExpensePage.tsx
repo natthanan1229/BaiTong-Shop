@@ -10,7 +10,8 @@ import {
   TrendingDown, 
   DollarSign,
   AlertCircle,
-  X
+  X,
+  Database
 } from 'lucide-react';
 import { SaleRecord, PurchaseRecord, ExpenseRecord } from '../types';
 import { store } from '../services/store';
@@ -157,7 +158,13 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
             <BarChart3 className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">6. สรุปยอดรายได้ค่าใช้จ่าย (Income & Expenses)</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">6. สรุปยอดรายได้ค่าใช้จ่าย (Income & Expenses)</h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#d0f8ce] text-[#2e7d32] border border-[#a5d6a7]">
+                <Database className="w-3 h-3" />
+                Summary_Expans_TB (วิเคราะห์คำนวณจาก Inventory_TB)
+              </span>
+            </div>
             <p className="text-xs text-slate-500">
               สรุปราคาสุทธิของแต่ละวันและสรุปราคาขายสุทธิของแต่ละวัน ออกเป็นกำไรขาดทุน
             </p>

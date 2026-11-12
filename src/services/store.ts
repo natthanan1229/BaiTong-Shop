@@ -1,6 +1,8 @@
 import { Product, PurchaseRecord, SaleRecord, ExpenseRecord, RegisteredUser, AuthSession, FormulaConfig } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_FORMULA_CONFIG } from '../data/initialProducts';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseService, supabase } from './supabaseService';
+
+export { supabase };
 
 const STORAGE_KEYS = {
   PRODUCTS: 'baitong_products_v1',
@@ -12,17 +14,46 @@ const STORAGE_KEYS = {
   CONFIG: 'baitong_formula_config_v1',
 };
 
-// Supabase client initialization with user credentials
-const SUPABASE_URL = 'https://xpyltldpeqsqijsbhdpf.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_RJQasgP4Z2sSsNGMDEqGFQ_-KI6l1lq';
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 class StoreService {
-  // ------------------ PRODUCTS ------------------
+  private isInitialized = false;
+
+  // Initialize and sync with Supabase tables on load
+  async initSupabaseSync(): Promise<void> {
+    if (this.isInitialized) return;
+    this.isInitialized = true;
+
+    try {
+      // 1. Fetch Inventory_TB from Supabase
+      const remoteProducts = await supabaseService.fetchInventory();
+      if (remoteProducts && remoteProducts.length > 0) {
+        this.saveProducts(remoteProducts);
+      } else {
+        // If Supabase table is empty, seed initial 30 products into Supabase
+        const current = this.getProducts();
+        for (const p of current) {
+          supabaseService.saveInventoryItem(p).catch(() => {});
+        }
+      }
+
+      // 2. Fetch Employee_TB from Supabase
+      const remoteEmployees = await supabaseService.fetchEmployees();
+      if (remoteEmployees && remoteEmployees.length > 0) {
+        this.saveUsers(remoteEmployees);
+      } else {
+        const currentUsers = this.getUsers();
+        for (const u of currentUsers) {
+          supabaseService.saveEmployee(u).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('Initial Supabase sync note:', err);
+    }
+  }
+
+  // ------------------ PRODUCTS (Inventory_TB) ------------------
   getProducts(): Product[] {
     const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
     if (!data) {
-      // Seed with initial products
       const initial = this.applyFormulas(INITIAL_PRODUCTS, this.getFormulaConfig());
       this.saveProducts(initial);
       return initial;
@@ -52,6 +83,10 @@ class StoreService {
     };
     const updated = [newProduct, ...products];
     this.saveProducts(updated);
+
+    // Sync to Supabase Inventory_TB
+    supabaseService.saveInventoryItem(newProduct).catch(() => {});
+
     return newProduct;
   }
 
@@ -61,21 +96,32 @@ class StoreService {
     const idx = products.findIndex(p => p.id === updatedProduct.id || p.barcode === updatedProduct.barcode);
     if (idx !== -1) {
       const stock = updatedProduct.stockQty;
-      products[idx] = {
+      const finalProduct: Product = {
         ...updatedProduct,
         status: stock < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ'
       };
+      products[idx] = finalProduct;
       this.saveProducts(products);
+
+      // Sync to Supabase Inventory_TB
+      supabaseService.saveInventoryItem(finalProduct).catch(() => {});
     }
   }
 
   deleteProduct(idOrBarcode: string): void {
+    const target = this.getProducts().find(p => p.id === idOrBarcode || p.barcode === idOrBarcode);
     const products = this.getProducts().filter(p => p.id !== idOrBarcode && p.barcode !== idOrBarcode);
     this.saveProducts(products);
+
+    if (target) {
+      // Sync delete to Supabase Inventory_TB
+      supabaseService.deleteInventoryItem(target.barcode).catch(() => {});
+    }
   }
 
   resetProductsToDefault(): void {
     this.saveProducts(INITIAL_PRODUCTS);
+    INITIAL_PRODUCTS.forEach(p => supabaseService.saveInventoryItem(p).catch(() => {}));
   }
 
   // ------------------ PURCHASES ------------------
@@ -105,9 +151,14 @@ class StoreService {
       if (prod) {
         prod.stockQty = (prod.stockQty || 0) + item.quantity;
         prod.receivedQty = (prod.receivedQty || 0) + item.quantity;
+        // Sync each modified item to Supabase Inventory_TB
+        supabaseService.saveInventoryItem(prod).catch(() => {});
       }
     });
     this.saveProducts(products);
+
+    // Sync to Supabase Summary_Expans_TB (วิเคราะห์ค่าใช้จ่ายจาก Inventory_TB และยอดซื้อ)
+    supabaseService.syncExpenseFromInventory(products, updated).catch(() => {});
 
     return newRecord;
   }
@@ -141,14 +192,19 @@ class StoreService {
       if (prod) {
         prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.quantity);
         prod.soldQty = (prod.soldQty || 0) + item.quantity;
+        // Sync item update to Supabase Inventory_TB
+        supabaseService.saveInventoryItem(prod).catch(() => {});
       }
     });
     this.saveProducts(products);
 
+    // Sync to Supabase Summary_Self_TB (บันทึกยอดขายสินค้าโดยวิเคราะห์จาก Inventory_TB)
+    supabaseService.recordSaleToSummarySelf(newRecord).catch(() => {});
+
     return newRecord;
   }
 
-  // ------------------ EXPENSES ------------------
+  // ------------------ EXPENSES (Summary_Expans_TB) ------------------
   getExpenses(): ExpenseRecord[] {
     const data = localStorage.getItem(STORAGE_KEYS.EXPENSES);
     if (!data) return [];
@@ -175,11 +231,10 @@ class StoreService {
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
   }
 
-  // ------------------ USERS ------------------
+  // ------------------ USERS / EMPLOYEES (Employee_TB) ------------------
   getUsers(): RegisteredUser[] {
     const data = localStorage.getItem(STORAGE_KEYS.USERS);
     if (!data) {
-      // Provide initial sample users if none exist
       const sampleUsers: RegisteredUser[] = [
         {
           userId: 'BT-10229',
@@ -216,7 +271,6 @@ class StoreService {
 
   registerUser(userData: Omit<RegisteredUser, 'registeredAt'>): RegisteredUser {
     const users = this.getUsers();
-    // Check if email already registered
     const existing = users.find(u => u.email.toLowerCase() === userData.email.toLowerCase());
     if (existing) {
       throw new Error(`อีเมล ${userData.email} ได้ลงทะเบียนไว้แล้วในระบบ รหัสผู้ใช้งานของคุณคือ: ${existing.userId}`);
@@ -228,6 +282,10 @@ class StoreService {
     };
     const updated = [newUser, ...users];
     this.saveUsers(updated);
+
+    // Sync to Supabase Employee_TB
+    supabaseService.saveEmployee(newUser).catch(() => {});
+
     return newUser;
   }
 
@@ -249,6 +307,10 @@ class StoreService {
     };
     const updated = [newUser, ...users];
     this.saveUsers(updated);
+
+    // Sync to Supabase Employee_TB
+    supabaseService.saveEmployee(newUser).catch(() => {});
+
     return newUser;
   }
 
@@ -261,6 +323,9 @@ class StoreService {
         ...updatedUser,
       };
       this.saveUsers(users);
+
+      // Sync to Supabase Employee_TB
+      supabaseService.saveEmployee(updatedUser).catch(() => {});
     } else {
       throw new Error(`ไม่พบสมาชิกที่มีรหัสผู้ใช้งาน ${updatedUser.userId}`);
     }
@@ -269,6 +334,9 @@ class StoreService {
   deleteUser(userId: string): void {
     const users = this.getUsers().filter(u => u.userId.toUpperCase() !== userId.toUpperCase());
     this.saveUsers(users);
+
+    // Sync delete to Supabase Employee_TB
+    supabaseService.deleteEmployee(userId).catch(() => {});
   }
 
   findUser(email: string, userId: string): RegisteredUser | null {
@@ -312,7 +380,6 @@ class StoreService {
 
   updateFormulaConfig(config: FormulaConfig): void {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(config));
-    // Re-apply to products
     const products = this.getProducts();
     this.saveProducts(this.applyFormulas(products, config));
   }

@@ -7,10 +7,12 @@ import {
   Search, 
   DollarSign, 
   Boxes, 
-  Receipt
+  Receipt,
+  Database
 } from 'lucide-react';
 import { PurchaseRecord } from '../types';
 import { ImageSlot } from '../components/ImageSlot';
+import { supabaseService } from '../services/supabaseService';
 
 interface PurchaseSummaryPageProps {
   purchases: PurchaseRecord[];
@@ -108,7 +110,13 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({ purcha
             <FileText className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">3. ระบบสรุปยอดซื้อสินค้า (Total Purchase)</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">3. ระบบสรุปยอดซื้อสินค้า (Total Purchase)</h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#b2dfdb]/40 text-[#00796b] border border-[#b2dfdb]">
+                <Database className="w-3 h-3" />
+                Inventory_TB (SELECT In_Date, In_Bar, In_Menu, In_Qty, In_Price_Cost, In_Sum_Cost)
+              </span>
+            </div>
             <p className="text-xs text-slate-500">
               สรุปรายการซื้อสินค้าของแต่ละวัน ระบุชื่อสินค้า จำนวน ราคาสินค้า และคำนวณราคาสุทธิ
             </p>

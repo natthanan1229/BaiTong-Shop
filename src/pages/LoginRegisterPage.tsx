@@ -15,7 +15,8 @@ import {
   Sparkles,
   Info,
   Building2,
-  Lock
+  Lock,
+  Database
 } from 'lucide-react';
 import { RegisteredUser, AuthSession } from '../types';
 import { store } from '../services/store';
@@ -327,6 +328,12 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
                     <UserPlus className="w-6 h-6" />
                   </div>
                   <h2 className="text-lg font-bold text-slate-800">ลงทะเบียนผู้ใช้งานใหม่</h2>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#d0f8ce] text-[#2e7d32] border border-[#a5d6a7]">
+                      <Database className="w-3 h-3" />
+                      ฐานข้อมูล: Employee_TB
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 mt-0.5">
                     กรอกข้อมูลครบถ้วน รหัสผู้ใช้งานจะประมวลผลให้อัตโนมัติ
                   </p>

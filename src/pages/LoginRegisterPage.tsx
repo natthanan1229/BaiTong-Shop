@@ -77,7 +77,7 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
   };
 
   // Handle User Login
-  const handleUserLogin = (e: React.FormEvent) => {
+  const handleUserLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserLoginError('');
 
@@ -86,7 +86,7 @@ export const LoginRegisterPage: React.FC<LoginRegisterPageProps> = ({ onLoginSuc
       return;
     }
 
-    const user = store.findUser(userLoginEmail, userLoginId);
+    const user = await store.findUserAsync(userLoginEmail, userLoginId);
     if (!user) {
       setUserLoginError('ไม่พบข้อมูลผู้ใช้งานที่ตรงกับอีเมลและรหัสผู้ใช้งานนี้ กรุณาตรวจสอบหรือลงทะเบียนใหม่');
       return;

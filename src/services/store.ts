@@ -18,20 +18,17 @@ class StoreService {
   private isInitialized = false;
 
   // Initialize and sync with Supabase tables on load
-  async initSupabaseSync(): Promise<void> {
-    if (this.isInitialized) return;
-    this.isInitialized = true;
-
+  async syncWithSupabase(): Promise<void> {
     try {
       // 1. Fetch Inventory_TB from Supabase
       const remoteProducts = await supabaseService.fetchInventory();
       if (remoteProducts && remoteProducts.length > 0) {
         this.saveProducts(remoteProducts);
-      } else {
+      } else if (!this.isInitialized) {
         // If Supabase table is empty, seed initial 30 products into Supabase
         const current = this.getProducts();
         for (const p of current) {
-          supabaseService.saveInventoryItem(p).catch(() => {});
+          await supabaseService.saveInventoryItem(p);
         }
       }
 
@@ -39,15 +36,27 @@ class StoreService {
       const remoteEmployees = await supabaseService.fetchEmployees();
       if (remoteEmployees && remoteEmployees.length > 0) {
         this.saveUsers(remoteEmployees);
-      } else {
+      } else if (!this.isInitialized) {
         const currentUsers = this.getUsers();
         for (const u of currentUsers) {
-          supabaseService.saveEmployee(u).catch(() => {});
+          await supabaseService.saveEmployee(u);
         }
       }
+
+      // 3. Fetch Summary_Expans_TB from Supabase
+      const remoteExpenses = await supabaseService.fetchSummaryExpenses();
+      if (remoteExpenses && remoteExpenses.length > 0) {
+        this.saveExpenses(remoteExpenses);
+      }
+
+      this.isInitialized = true;
     } catch (err) {
-      console.warn('Initial Supabase sync note:', err);
+      console.warn('Supabase sync note:', err);
     }
+  }
+
+  async initSupabaseSync(): Promise<void> {
+    return this.syncWithSupabase();
   }
 
   // ------------------ PRODUCTS (Inventory_TB) ------------------
@@ -241,6 +250,10 @@ class StoreService {
     return newRecord;
   }
 
+  saveExpenses(expenses: ExpenseRecord[]): void {
+    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
+  }
+
   deleteExpense(id: string): void {
     const expenses = this.getExpenses().filter(e => e.id !== id);
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
@@ -385,6 +398,43 @@ class StoreService {
       u.userId.toUpperCase().trim() === userId.toUpperCase().trim()
     );
     return user || null;
+  }
+
+  async findUserAsync(email: string, userId: string): Promise<RegisteredUser | null> {
+    const local = this.findUser(email, userId);
+    if (local) return local;
+
+    // Cross-device cloud check directly from Supabase Employee_TB
+    try {
+      const { data, error } = await supabase
+        .from('Employee_TB')
+        .select('*')
+        .ilike('EM_Email', email.trim())
+        .eq('Em_ID', userId.trim().toUpperCase())
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        const r = data[0];
+        const cloudUser: RegisteredUser = {
+          userId: r.Em_ID,
+          fullName: r.Em_Name,
+          phone: r.EM_Tell,
+          email: r.EM_Email,
+          status: r.Em_Status === 'suspended' ? 'suspended' : 'active',
+          registeredAt: r.EM_date || new Date().toISOString(),
+          note: r.Em_User || '',
+        };
+        const users = this.getUsers();
+        if (!users.some(u => u.userId.toUpperCase() === cloudUser.userId.toUpperCase())) {
+          this.saveUsers([...users, cloudUser]);
+        }
+        return cloudUser;
+      }
+    } catch (err) {
+      console.warn('findUserAsync cloud lookup note:', err);
+    }
+
+    return null;
   }
 
   // ------------------ AUTH SESSION ------------------

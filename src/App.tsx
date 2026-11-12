@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthSession, Product, PurchaseRecord, SaleRecord, ExpenseRecord } from './types';
 import { store } from './services/store';
+import { supabaseService } from './services/supabaseService';
 import { Header } from './components/Header';
 import { LoginRegisterPage } from './pages/LoginRegisterPage';
 import { ProgrammeMenu } from './pages/ProgrammeMenu';
@@ -31,10 +32,31 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    store.initSupabaseSync().then(() => {
+    // 1. Initial cloud sync from Supabase
+    store.syncWithSupabase().then(() => {
       refreshData();
     });
     refreshData();
+
+    // 2. Realtime listener: triggers whenever any device updates Supabase tables
+    const unsubscribe = supabaseService.subscribeToChanges((table) => {
+      console.log('Realtime table update received from Supabase:', table);
+      store.syncWithSupabase().then(() => {
+        refreshData();
+      });
+    });
+
+    // 3. Periodic cloud sync every 8 seconds (ensures cross-device consistency)
+    const interval = setInterval(() => {
+      store.syncWithSupabase().then(() => {
+        refreshData();
+      });
+    }, 8000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [session]);
 
   const handleLoginSuccess = (newSession: AuthSession) => {

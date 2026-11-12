@@ -360,6 +360,31 @@ export class SupabaseService {
       return null;
     }
   }
+
+  // ================= 7. ระบบ Realtime สำหรับอัปเดตข้อมูลทุกเครื่องพร้อมกัน =================
+  subscribeToChanges(onUpdate: (table: string) => void): () => void {
+    try {
+      const channel = supabase
+        .channel('db-realtime-all')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public' },
+          (payload) => {
+            if (payload && payload.table) {
+              onUpdate(payload.table);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch (err) {
+      console.warn('Realtime subscription notice:', err);
+      return () => {};
+    }
+  }
 }
 
 export const supabaseService = new SupabaseService();

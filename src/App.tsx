@@ -136,6 +136,8 @@ export const App: React.FC = () => {
           {currentPage === 'sales-summary' && (
             <SalesSummaryPage
               sales={sales}
+              session={session}
+              onRefresh={refreshData}
             />
           )}
 

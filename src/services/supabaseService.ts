@@ -361,6 +361,43 @@ export class SupabaseService {
     }
   }
 
+  async deleteSummarySaleItem(receiptNumber: string, barcode: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('Summary_Self_TB')
+        .delete()
+        .eq('In_Receipt', receiptNumber)
+        .eq('In_Bar', barcode);
+
+      if (error) {
+        console.warn('Supabase deleteSummarySaleItem warning:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase deleteSummarySaleItem failed:', err);
+      return false;
+    }
+  }
+
+  async deleteSummarySaleReceipt(receiptNumber: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('Summary_Self_TB')
+        .delete()
+        .eq('In_Receipt', receiptNumber);
+
+      if (error) {
+        console.warn('Supabase deleteSummarySaleReceipt warning:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase deleteSummarySaleReceipt failed:', err);
+      return false;
+    }
+  }
+
   // ================= 7. ระบบ Realtime สำหรับอัปเดตข้อมูลทุกเครื่องพร้อมกัน =================
   subscribeToChanges(onUpdate: (table: string) => void): () => void {
     try {

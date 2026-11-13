@@ -228,6 +228,108 @@ class StoreService {
     return newRecord;
   }
 
+  saveSales(sales: SaleRecord[]): void {
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+  }
+
+  async deleteSaleItem(
+    receiptNumber: string,
+    barcode: string,
+    qty: number,
+    restoreStock: boolean = true
+  ): Promise<{ success: boolean; message: string }> {
+    const sales = this.getSales();
+    const saleIndex = sales.findIndex(s => s.receiptNumber === receiptNumber);
+    if (saleIndex === -1) {
+      return { success: false, message: 'ไม่พบรายการขายตามเลขที่ใบเสร็จที่ระบุ' };
+    }
+
+    const sale = sales[saleIndex];
+    const itemIndex = sale.items.findIndex(it => it.barcode === barcode);
+    if (itemIndex === -1) {
+      return { success: false, message: 'ไม่พบรายการสินค้านี้ในใบเสร็จ' };
+    }
+
+    const item = sale.items[itemIndex];
+    const actualQty = qty || item.quantity;
+    const itemName = item.name;
+
+    // 1. Restore Inventory Stock in store and Supabase Inventory_TB
+    if (restoreStock) {
+      const products = this.getProducts();
+      const prod = products.find(p => p.barcode === barcode);
+      if (prod) {
+        prod.stockQty = (prod.stockQty || 0) + actualQty;
+        prod.soldQty = Math.max(0, (prod.soldQty || 0) - actualQty);
+        this.saveProducts(products);
+        // Sync item update to Supabase Inventory_TB
+        supabaseService.saveInventoryItem(prod).catch(() => {});
+      }
+    }
+
+    // 2. Remove item from sale record
+    if (sale.items.length <= 1) {
+      sales.splice(saleIndex, 1);
+    } else {
+      sale.items.splice(itemIndex, 1);
+      sale.netTotal = sale.items.reduce((s, it) => s + it.total, 0);
+      sale.change = Math.max(0, (sale.cashReceived || 0) - sale.netTotal);
+    }
+    this.saveSales(sales);
+
+    // 3. Delete from Supabase Summary_Self_TB
+    try {
+      await supabaseService.deleteSummarySaleItem(receiptNumber, barcode);
+    } catch (err) {
+      console.warn('Supabase deleteSummarySaleItem note:', err);
+    }
+
+    return {
+      success: true,
+      message: `ลบรายการ "${itemName}" สำเร็จ (คืนสต็อกเข้าคลัง ${actualQty} ชิ้นเรียบร้อย)`
+    };
+  }
+
+  async deleteSaleReceipt(
+    receiptNumber: string,
+    restoreStock: boolean = true
+  ): Promise<{ success: boolean; message: string }> {
+    const sales = this.getSales();
+    const sale = sales.find(s => s.receiptNumber === receiptNumber);
+    if (!sale) {
+      return { success: false, message: 'ไม่พบเลขที่ใบเสร็จนี้' };
+    }
+
+    // Restore stock for all items
+    if (restoreStock) {
+      const products = this.getProducts();
+      sale.items.forEach(item => {
+        const prod = products.find(p => p.barcode === item.barcode);
+        if (prod) {
+          prod.stockQty = (prod.stockQty || 0) + item.quantity;
+          prod.soldQty = Math.max(0, (prod.soldQty || 0) - item.quantity);
+          supabaseService.saveInventoryItem(prod).catch(() => {});
+        }
+      });
+      this.saveProducts(products);
+    }
+
+    const updated = sales.filter(s => s.receiptNumber !== receiptNumber);
+    this.saveSales(updated);
+
+    // Sync delete to Supabase Summary_Self_TB
+    try {
+      await supabaseService.deleteSummarySaleReceipt(receiptNumber);
+    } catch (err) {
+      console.warn('Supabase deleteSummarySaleReceipt note:', err);
+    }
+
+    return {
+      success: true,
+      message: `ลบบิลขาย "${receiptNumber}" สำเร็จเรียบร้อย`
+    };
+  }
+
   // ------------------ EXPENSES (Summary_Expans_TB) ------------------
   getExpenses(): ExpenseRecord[] {
     const data = localStorage.getItem(STORAGE_KEYS.EXPENSES);

@@ -8,18 +8,35 @@ import {
   DollarSign, 
   Boxes, 
   Receipt,
-  Database
+  Database,
+  Trash2,
+  CheckCircle,
+  AlertCircle,
+  ShieldCheck
 } from 'lucide-react';
-import { SaleRecord } from '../types';
+import { SaleRecord, AuthSession } from '../types';
 import { ImageSlot } from '../components/ImageSlot';
+import { store } from '../services/store';
 
 interface SalesSummaryPageProps {
   sales: SaleRecord[];
+  session?: AuthSession;
+  isAdmin?: boolean;
+  onRefresh?: () => void;
 }
 
-export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => {
+export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ 
+  sales,
+  session,
+  isAdmin: propIsAdmin,
+  onRefresh
+}) => {
+  const isAdmin = propIsAdmin ?? (session?.role === 'admin');
+
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Flatten items for table display matching Excel Total Sales Sheet
   const allRows: Array<{
@@ -67,6 +84,39 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
   const totalRevenue = filteredRows.reduce((sum, r) => sum + r.total, 0);
   const totalItemsCount = filteredRows.reduce((sum, r) => sum + r.qty, 0);
 
+  const handleDeleteRow = async (row: typeof allRows[0]) => {
+    if (!isAdmin) {
+      alert('เฉพาะผู้ดูแลระบบ (ADMIN) เท่านั้นที่สามารถลบรายการสินค้าได้');
+      return;
+    }
+
+    const confirmMsg = `คุณแน่ใจหรือไม่ว่าต้องการลบรายการขายนี้?\n\n` +
+      `• รายการสินค้า: ${row.name}\n` +
+      `• Barcode: ${row.barcode}\n` +
+      `• จำนวน: ${row.qty} ชิ้น\n` +
+      `• ยอดรวม: ฿${row.total.toLocaleString()}\n` +
+      `• เลขที่ใบเสร็จ: ${row.receiptNumber}\n\n` +
+      `* ข้อมูลจะถูกลบออกจากระบบสรุปยอดขาย และจำนวนสินค้า ${row.qty} ชิ้นจะถูกคืนเข้าคลังสินค้าอัตโนมัติ`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsDeleting(true);
+    try {
+      const res = await store.deleteSaleItem(row.receiptNumber, row.barcode, row.qty, true);
+      if (res.success) {
+        setFeedback({ text: res.message, type: 'success' });
+        if (onRefresh) onRefresh();
+      } else {
+        setFeedback({ text: res.message, type: 'error' });
+      }
+    } catch (err: any) {
+      setFeedback({ text: err?.message || 'เกิดข้อผิดพลาดในการลบรายการ', type: 'error' });
+    } finally {
+      setIsDeleting(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
   const exportCsv = () => {
     const headers = ['วันที่', 'เลขที่ใบเสร็จ', 'รหัสสินค้า', 'รายการสินค้า', 'จำนวน', 'หน่วยละ', 'รวม', 'ยอดรวมสุทธิ'];
     const rows = filteredRows.map(r => [
@@ -111,12 +161,18 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
             <TrendingUp className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg font-bold text-slate-800">5. ระบบสรุปยอดขายสินค้า (Total Sales)</h1>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
                 <Database className="w-3 h-3" />
                 Summary_Self_TB (SELECT เรียกดูของจาก Inventory_TB เพื่อวิเคราะห์)
               </span>
+              {isAdmin && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-rose-600" />
+                  โหมด ADMIN: สามารถลบรายการสินค้าและคืนสต็อกเข้าคลังได้
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500">
               สรุปรายการขายสินค้าของแต่ละวัน ระบุชื่อสินค้า จำนวนสินค้า ราคาสินค้า และคำนวณราคาสุทธิ
@@ -141,6 +197,31 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
           </button>
         </div>
       </div>
+
+      {/* Feedback Notification */}
+      {feedback && (
+        <div className={`p-3.5 rounded-xl text-xs font-semibold flex items-center justify-between border shadow-xs transition-all animate-in fade-in ${
+          feedback.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
+            : 'bg-rose-50 text-rose-800 border-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {feedback.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{feedback.text}</span>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setFeedback(null)}
+            className="text-slate-400 hover:text-slate-600 text-xs font-bold px-2 py-0.5"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -232,18 +313,23 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
                 <th className="py-2.5 px-3 text-right w-24">หน่วยละ</th>
                 <th className="py-2.5 px-3 text-right w-28">รวม</th>
                 <th className="py-2.5 px-3 text-center w-28">แคชเชียร์</th>
+                {isAdmin && (
+                  <th className="py-2.5 px-3 text-center w-24 text-rose-700 font-bold">
+                    จัดการ (ADMIN)
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={isAdmin ? 10 : 9} className="py-12 text-center text-slate-400">
                     ไม่พบรายการขายสินค้าตามเงื่อนไขที่เลือก
                   </td>
                 </tr>
               ) : (
                 filteredRows.map((row, idx) => (
-                  <tr key={`${row.receiptNumber}-${idx}`} className="hover:bg-slate-50">
+                  <tr key={`${row.receiptNumber}-${row.barcode}-${idx}`} className="hover:bg-slate-50 transition">
                     <td className="py-2.5 px-3 text-center text-slate-500">{idx + 1}</td>
                     <td className="py-2.5 px-3 font-mono text-slate-700">{row.date}</td>
                     <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">{row.receiptNumber}</td>
@@ -255,6 +341,20 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
                       ฿{row.total.toLocaleString()}
                     </td>
                     <td className="py-2.5 px-3 text-center text-slate-500">{row.cashier}</td>
+                    {isAdmin && (
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRow(row)}
+                          disabled={isDeleting}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 transition shadow-2xs hover:shadow-xs active:scale-95 disabled:opacity-50"
+                          title={`ลบรายการ "${row.name}" ออกจากสรุปยอดขาย (คืนสต็อกเข้าคลัง)`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>ลบ</span>
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -273,6 +373,7 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({ sales }) => 
                     ฿{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td></td>
+                  {isAdmin && <td></td>}
                 </tr>
               </tfoot>
             )}

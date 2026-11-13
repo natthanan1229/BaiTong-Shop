@@ -330,16 +330,26 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
                 filteredRows.map((row, idx) => (
                   <tr key={`${row.purchaseId}-${row.barcode}-${idx}`} className="hover:bg-slate-50 transition">
                     <td className="py-2.5 px-3 text-center text-slate-500">{idx + 1}</td>
-                    <td className="py-2.5 px-3 font-mono text-slate-700">{row.date}</td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-slate-700">{row.barcode}</td>
-                    <td className="py-2.5 px-4 font-medium text-slate-800">{row.name}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-700">
+                      {row.date || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-700">
+                      {row.barcode || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
+                    <td className="py-2.5 px-4 font-medium text-slate-800">
+                      {row.name || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
                     <td className="py-2.5 px-3 text-center font-bold text-slate-700">{row.qty}</td>
-                    <td className="py-2.5 px-3 text-center text-slate-600">{row.unit}</td>
+                    <td className="py-2.5 px-3 text-center text-slate-600">
+                      {row.unit || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
                     <td className="py-2.5 px-3 text-right font-mono text-slate-600">฿{row.unitPrice}</td>
                     <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800">
                       ฿{row.total.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">{row.buyer}</td>
+                    <td className="py-2.5 px-3 text-center text-slate-500">
+                      {row.buyer || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
                     {isAdmin && (
                       <td className="py-2.5 px-3 text-center">
                         <button

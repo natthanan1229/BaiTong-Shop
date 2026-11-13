@@ -54,7 +54,8 @@ export class SupabaseService {
     try {
       const { data, error } = await supabase
         .from('Inventory_TB')
-        .select('*');
+        .select('*')
+        .order('In_ID', { ascending: true });
 
       if (error) {
         console.warn('Supabase fetchInventory warning:', error.message);
@@ -63,21 +64,30 @@ export class SupabaseService {
 
       if (data && data.length > 0) {
         return data.map((row: any) => {
+          const cost = Number(row.In_Count_Cost_IN) || 0;
+          const sell = Number(row.In_PriceSum) || Number(row.In_Count_Self) || 0;
           const receivedQty = Number(row.In_Price_Cost) || 0;
           const soldQty = Number(row.In_Price_Self) || 0;
-          // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
-          const stockQty = Math.max(0, receivedQty - soldQty);
+          // Requirement: In_Price_Cost - In_Price_Self = In_Qty
+          const stockQty = row.In_Qty !== null && row.In_Qty !== undefined 
+            ? Number(row.In_Qty) 
+            : Math.max(0, receivedQty - soldQty);
 
           return {
             id: String(row.In_ID || row.In_Bar),
-            barcode: row.In_Bar,
-            name: row.In_Menu,
-            unit: row.In_Unit || 'อัน',
-            costPrice: Number(row.In_Count_Cost_IN) || Math.round((Number(row.In_PriceSum) || 15) * 0.7) || 10,
-            sellPrice: Number(row.In_PriceSum) || 0,
+            barcode: row.In_Bar || '',
+            name: row.In_Menu || '',
+            unit: row.In_Unit || '',
+            costPrice: cost,
+            sellPrice: sell,
             receivedQty: receivedQty,
+            receivedTotal: Number(row.In_Sum_Cost) || (receivedQty * cost),
             soldQty: soldQty,
+            soldTotal: Number(row.In_Sum_Self) || (soldQty * sell),
+            lastSaleDate: row.In_Date_Self || null,
             stockQty: stockQty,
+            stockTotal: Number(row.In_SumSelf) || (stockQty * sell),
+            lastReceipt: row.In_Receipt || null,
             status: row.In_Status || (stockQty < 12 ? 'สั่งซื้อ' : 'ปกติ'),
           };
         });
@@ -91,22 +101,30 @@ export class SupabaseService {
 
   async saveInventoryItem(product: Product): Promise<boolean> {
     try {
+      const cost = product.costPrice || 0;
+      const sell = product.sellPrice || 0;
       const received = product.receivedQty !== undefined ? product.receivedQty : (product.stockQty + (product.soldQty || 0));
       const sold = product.soldQty || 0;
-      // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+      // Requirement: In_Price_Cost - In_Price_Self = In_Qty
       const stock = Math.max(0, received - sold);
+      const idNum = parseInt(product.id, 10) || (product.barcode ? parseInt(product.barcode.replace(/\D/g, ''), 10) : 1);
 
       const row: any = {
+        In_ID: idNum,
         In_Bar: product.barcode,
         In_Menu: product.name,
-        In_Unit: product.unit,
-        In_Price_Cost: received,     // In_Price_Cost = ยอดรับเข้าสะสม (เชื่อมจากหน้ารายการซื้อ)
-        In_Price_Self: sold,         // In_Price_Self = ยอดขายออกสะสม (เชื่อมจากหน้าขาย POS)
-        In_Qty: String(stock),       // In_Qty = In_Price_Cost - In_Price_Self
-        In_PriceSum: product.sellPrice,
-        In_Sum_Cost: String(received * (product.costPrice || 10)),
-        In_Sum_Self: String(sold * (product.sellPrice || 15)),
-        In_SumSelf: String(stock * (product.sellPrice || 15)),
+        In_Unit: product.unit || '',
+        In_Count_Cost_IN: cost,
+        In_Price_Cost: received,                 // ยอดรับเข้าสะสม (เชื่อมจากหน้ารายการซื้อ)
+        In_Sum_Cost: received * cost,
+        In_Count_Self: sell,
+        In_Price_Self: sold,                     // ยอดขายออกสะสม (เชื่อมจากหน้าขาย POS)
+        In_Sum_Self: sold * sell,
+        In_Date_Self: product.lastSaleDate || null,
+        In_Qty: stock,                           // In_Price_Cost - In_Price_Self
+        In_PriceSum: sell,
+        In_SumSelf: stock * sell,
+        In_Receipt: product.lastReceipt || null,
         In_Status: product.status || (stock < 12 ? 'สั่งซื้อ' : 'ปกติ'),
       };
 

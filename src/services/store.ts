@@ -49,6 +49,18 @@ class StoreService {
         this.saveExpenses(remoteExpenses);
       }
 
+      // 4. Real-time Subscription to Inventory_TB (Cross-device instant sync)
+      supabase
+        .channel('public:Inventory_TB_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'Inventory_TB' }, async () => {
+          const fresh = await supabaseService.fetchInventory();
+          if (fresh && fresh.length > 0) {
+            this.saveProducts(fresh);
+            window.dispatchEvent(new CustomEvent('inventory-updated'));
+          }
+        })
+        .subscribe();
+
       this.isInitialized = true;
     } catch (err) {
       console.warn('Supabase sync note:', err);
@@ -174,11 +186,16 @@ class StoreService {
     purchase.items.forEach(item => {
       const prod = products.find(p => p.barcode === item.barcode);
       if (prod) {
+        const cost = prod.costPrice || 0;
+        const sell = prod.sellPrice || 0;
         const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
         prod.receivedQty = received + item.quantity;
+        prod.receivedTotal = prod.receivedQty * cost;
         prod.soldQty = prod.soldQty || 0;
+        prod.soldTotal = prod.soldQty * sell;
         // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
         prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+        prod.stockTotal = prod.stockQty * sell;
         prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
         // Sync each modified item to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
@@ -323,11 +340,18 @@ class StoreService {
     sale.items.forEach(item => {
       const prod = products.find(p => p.barcode === item.barcode);
       if (prod) {
+        const cost = prod.costPrice || 0;
+        const sell = prod.sellPrice || 0;
         const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
         prod.receivedQty = received;
+        prod.receivedTotal = prod.receivedQty * cost;
         prod.soldQty = (prod.soldQty || 0) + item.quantity;
+        prod.soldTotal = prod.soldQty * sell;
+        prod.lastSaleDate = sale.date;
+        prod.lastReceipt = receiptNumber;
         // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
         prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+        prod.stockTotal = prod.stockQty * sell;
         prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
         // Sync item update to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});

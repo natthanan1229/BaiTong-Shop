@@ -341,9 +341,15 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
                     cartItems.map((item, idx) => (
                       <tr key={item.barcode} className="hover:bg-slate-50">
                         <td className="py-2 px-2 text-center text-slate-500">{idx + 1}</td>
-                        <td className="py-2 px-2 font-mono font-bold text-slate-700">{item.barcode}</td>
-                        <td className="py-2 px-3 font-medium text-slate-800">{item.name}</td>
-                        <td className="py-2 px-2 text-center font-mono text-slate-600">฿{item.price}</td>
+                        <td className="py-2 px-2 font-mono font-bold text-slate-700">
+                          {item.barcode || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                        </td>
+                        <td className="py-2 px-3 font-medium text-slate-800">
+                          {item.name || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                        </td>
+                        <td className="py-2 px-2 text-center font-mono text-slate-600">
+                          {item.price ? `฿${item.price}` : <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                        </td>
                         <td className="py-2 px-2 text-center">
                           <div className="inline-flex items-center gap-1">
                             <button

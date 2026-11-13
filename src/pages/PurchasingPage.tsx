@@ -336,9 +336,15 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
                 cartItems.map((item, idx) => (
                   <tr key={item.barcode} className="hover:bg-slate-50">
                     <td className="py-2.5 px-3 text-center text-slate-500">{idx + 1}</td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-slate-700">{item.barcode}</td>
-                    <td className="py-2.5 px-4 font-medium text-slate-800">{item.name}</td>
-                    <td className="py-2.5 px-2 text-center text-slate-600">{item.unit}</td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-700">
+                      {item.barcode || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
+                    <td className="py-2.5 px-4 font-medium text-slate-800">
+                      {item.name || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
+                    <td className="py-2.5 px-2 text-center text-slate-600">
+                      {item.unit || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    </td>
                     <td className="py-2.5 px-3 text-right">
                       <input
                         type="number"

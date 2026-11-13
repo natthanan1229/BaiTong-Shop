@@ -45,7 +45,7 @@ class StoreService {
 
       // 3. Fetch Summary_Expans_TB from Supabase
       const remoteExpenses = await supabaseService.fetchSummaryExpenses();
-      if (remoteExpenses && remoteExpenses.length > 0) {
+      if (remoteExpenses !== null) {
         this.saveExpenses(remoteExpenses);
       }
 
@@ -653,8 +653,17 @@ class StoreService {
     return newRecord;
   }
 
-  async setOtherExpenseForDate(date: string, amount: number, title?: string): Promise<ExpenseRecord> {
-    const expenses = this.getExpenses();
+  async setOtherExpenseForDate(date: string, amount: number | null, title?: string): Promise<ExpenseRecord | null> {
+    let expenses = this.getExpenses();
+
+    if (amount === null || amount === undefined || isNaN(amount) || amount <= 0) {
+      // Clear other expense for this date
+      expenses = expenses.filter(e => !(e.date === date && (e.category === 'ค่าใช้จ่ายอื่นๆ' || e.title.includes('ค่าใช้จ่ายอื่น') || e.title.includes('บันทึกเอง'))));
+      this.saveExpenses(expenses);
+      supabaseService.clearOtherExpenseForDate(date).catch(() => {});
+      return null;
+    }
+
     const existingIdx = expenses.findIndex(e => e.date === date && (e.category === 'ค่าใช้จ่ายอื่นๆ' || e.title.includes('ค่าใช้จ่ายอื่น') || e.title.includes('บันทึกเอง')));
     let record: ExpenseRecord;
 
@@ -689,7 +698,8 @@ class StoreService {
 
   deleteExpense(id: string): void {
     const expenses = this.getExpenses().filter(e => e.id !== id);
-    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
+    this.saveExpenses(expenses);
+    supabaseService.deleteExpenseById(id).catch(() => {});
   }
 
   // ------------------ USERS / EMPLOYEES (Employee_TB) ------------------

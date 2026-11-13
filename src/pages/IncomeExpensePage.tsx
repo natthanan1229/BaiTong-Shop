@@ -40,17 +40,21 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
   // Form for adding other expense (dedicated on-page form)
   const [expTitle, setExpTitle] = useState('');
   const [expCategory, setExpCategory] = useState('ค่าใช้จ่ายทั่วไป');
-  const [expAmount, setExpAmount] = useState<number | ''>('');
+  const [expAmount, setExpAmount] = useState<string>('');
   const [expDate, setExpDate] = useState(new Date().toISOString().slice(0, 10));
 
-  // Inline editable other expenses per day { [date]: number }
-  const [editingOtherExpenses, setEditingOtherExpenses] = useState<Record<string, number>>({});
+  // Inline editable other expenses per day { [date]: string } (ค่าว่างถ้าไม่มีการกรอกข้อมูล)
+  const [editingOtherExpenses, setEditingOtherExpenses] = useState<Record<string, string>>({});
 
-  // Sync initial other expenses into editing state
+  // Sync initial other expenses into editing state (เฉพาะรายการที่มีค่า > 0)
   useEffect(() => {
-    const map: Record<string, number> = {};
+    const map: Record<string, string> = {};
     expenses.forEach(e => {
-      map[e.date] = (map[e.date] || 0) + (e.amount || 0);
+      const amt = Number(e.amount);
+      if (!isNaN(amt) && amt > 0) {
+        const cur = map[e.date] ? parseFloat(map[e.date]) : 0;
+        map[e.date] = String(cur + amt);
+      }
     });
     setEditingOtherExpenses(map);
   }, [expenses]);
@@ -59,7 +63,9 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
   const datesSet = new Set<string>();
   sales.forEach(s => datesSet.add(s.date));
   purchases.forEach(p => datesSet.add(p.date));
-  expenses.forEach(e => datesSet.add(e.date));
+  expenses.forEach(e => {
+    if (e.amount && e.amount > 0) datesSet.add(e.date);
+  });
 
   // If no records yet, add today
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -84,10 +90,10 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
       .filter(p => p.date === date)
       .reduce((sum, p) => sum + p.netTotal, 0);
 
-    // 3. ค่าใช้จ่ายอื่น (Other Expenses on this date - user editable)
-    const otherCost = editingOtherExpenses[date] !== undefined
-      ? editingOtherExpenses[date]
-      : expenses.filter(e => e.date === date).reduce((sum, e) => sum + e.amount, 0);
+    // 3. ค่าใช้จ่ายอื่น (Other Expenses on this date - ว่างถ้าไม่มีการกรอกข้อมูล)
+    const rawVal = editingOtherExpenses[date];
+    const hasValue = rawVal !== undefined && rawVal !== null && rawVal.trim() !== '';
+    const otherCost = hasValue ? (parseFloat(rawVal) || 0) : 0;
 
     // 4. กำไร / ขาดทุน = รายได้ - ค่าใช้จ่าย - ค่าใช้จ่ายอื่น
     const profit = income - purchaseCost - otherCost;
@@ -98,6 +104,7 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
       income,
       purchaseCost,
       otherCost,
+      hasOtherCost: hasValue && otherCost > 0,
       profit
     };
   });
@@ -110,19 +117,31 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
 
   // Handle direct inline typing in daily table cell
   const handleDailyOtherCostChange = (date: string, valStr: string) => {
-    const val = parseFloat(valStr);
-    const amount = isNaN(val) ? 0 : val;
+    // เก็บค่าที่ผู้ใช้พิมพ์โดยตรง รวมทั้งค่าว่าง ""
     setEditingOtherExpenses(prev => ({
       ...prev,
-      [date]: amount
+      [date]: valStr
     }));
   };
 
   // On blur, persist to store and Supabase Summary_Expans_TB
   const handleDailyOtherCostBlur = async (date: string) => {
-    const amount = editingOtherExpenses[date] || 0;
-    await store.setOtherExpenseForDate(date, amount, `ค่าใช้จ่ายอื่นๆ (${date})`);
-    setSaveSuccessMsg(`บันทึกค่าใช้จ่ายอื่นวันที่ ${date} จำนวน ฿${amount.toLocaleString()} ลงในตาราง Summary_Expans_TB สำเร็จ`);
+    const raw = editingOtherExpenses[date];
+    if (raw === undefined || raw === null || raw.trim() === '') {
+      // ผู้ใช้เว้นว่างไว้ หรือลบข้อความออกจนว่าง -> เคลียร์ค่าออกให้เป็นค่าว่าง
+      await store.setOtherExpenseForDate(date, null);
+      setSaveSuccessMsg(`ค่าใช้จ่ายอื่นวันที่ ${date} เป็นค่าว่างเรียบร้อย`);
+    } else {
+      const val = parseFloat(raw);
+      if (isNaN(val) || val <= 0) {
+        setEditingOtherExpenses(prev => ({ ...prev, [date]: '' }));
+        await store.setOtherExpenseForDate(date, null);
+        setSaveSuccessMsg(`ค่าใช้จ่ายอื่นวันที่ ${date} เป็นค่าว่างเรียบร้อย`);
+      } else {
+        await store.setOtherExpenseForDate(date, val, `ค่าใช้จ่ายอื่นๆ (${date})`);
+        setSaveSuccessMsg(`บันทึกค่าใช้จ่ายอื่นวันที่ ${date} จำนวน ฿${val.toLocaleString()} ลงในตาราง Summary_Expans_TB สำเร็จ`);
+      }
+    }
     setTimeout(() => setSaveSuccessMsg(''), 4000);
     onRefresh();
   };
@@ -130,7 +149,7 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
   // Form submit for adding specific other expense
   const handleAddOtherExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numericAmount = typeof expAmount === 'number' ? expAmount : parseFloat(expAmount);
+    const numericAmount = parseFloat(expAmount);
     if (!expTitle.trim() || isNaN(numericAmount) || numericAmount <= 0) {
       alert('กรุณากรอกรายการและจำนวนเงินที่ถูกต้อง');
       return;
@@ -144,10 +163,13 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
       createdByName: 'แอดมิน/ผู้ใช้งาน (กรอกเอง)',
     });
 
-    setEditingOtherExpenses(prev => ({
-      ...prev,
-      [expDate]: (prev[expDate] || 0) + numericAmount
-    }));
+    setEditingOtherExpenses(prev => {
+      const cur = prev[expDate] && prev[expDate].trim() !== '' ? parseFloat(prev[expDate]) : 0;
+      return {
+        ...prev,
+        [expDate]: String(cur + numericAmount)
+      };
+    });
 
     setIsAddExpenseOpen(false);
     setSaveSuccessMsg(`บันทึกรายการ "${expTitle.trim()}" จำนวน ฿${numericAmount.toLocaleString()} ลงในตาราง Summary_Expans_TB เรียบร้อยแล้ว`);
@@ -171,7 +193,7 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
       `"${r.description}"`,
       r.income,
       r.purchaseCost,
-      r.otherCost,
+      r.otherCost > 0 ? r.otherCost : 'Empty',
       r.profit
     ]);
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -266,8 +288,16 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
           <div className="text-xs text-slate-500 font-medium">ค่าใช้จ่ายอื่น (กรอกข้อมูลเอง)</div>
-          <div className="text-xl font-bold font-mono text-amber-700 mt-1">
-            ฿{totalOtherCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          <div className="mt-1">
+            {totalOtherCost > 0 ? (
+              <span className="text-xl font-bold font-mono text-amber-700">
+                ฿{totalOtherCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            ) : (
+              <span className="inline-block px-2.5 py-1 rounded-md text-xs font-sans font-medium bg-slate-100 text-slate-400 border border-dashed border-slate-300">
+                ว่าง (ยังไม่มีรายการ)
+              </span>
+            )}
           </div>
         </div>
 
@@ -366,8 +396,8 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
                 min="1"
                 step="any"
                 value={expAmount}
-                onChange={(e) => setExpAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                placeholder="0.00"
+                onChange={(e) => setExpAmount(e.target.value)}
+                placeholder="กรอกจำนวนเงิน (บาท)"
                 className="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-300 outline-none"
                 required
               />
@@ -432,17 +462,19 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
                     ฿{row.purchaseCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="py-2 px-3 text-right">
-                    <div className="inline-flex items-center justify-end gap-1 bg-amber-50/80 px-2 py-0.5 rounded-md border border-amber-200 shadow-2xs">
-                      <span className="text-amber-800 font-bold text-xs">฿</span>
+                    <div className="inline-flex items-center justify-end gap-1 bg-white hover:bg-amber-50/50 px-2 py-1 rounded-lg border border-slate-300 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-200 transition shadow-2xs">
+                      {editingOtherExpenses[row.date] !== undefined && editingOtherExpenses[row.date] !== null && editingOtherExpenses[row.date].trim() !== '' && (
+                        <span className="text-amber-800 font-bold text-xs">฿</span>
+                      )}
                       <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={editingOtherExpenses[row.date] !== undefined ? editingOtherExpenses[row.date] : row.otherCost}
+                        type="text"
+                        inputMode="decimal"
+                        value={editingOtherExpenses[row.date] ?? ''}
                         onChange={(e) => handleDailyOtherCostChange(row.date, e.target.value)}
                         onBlur={() => handleDailyOtherCostBlur(row.date)}
-                        className="w-20 text-right py-0.5 px-1 border-0 bg-transparent font-mono font-bold text-amber-900 focus:bg-white focus:ring-1 focus:ring-amber-400 focus:outline-none rounded text-xs"
-                        title="คลิกเพื่อแก้ไขค่าใช้จ่ายอื่นของวันนี้โดยตรง (บันทึกลงตาราง Summary_Expans_TB อัตโนมัติ)"
+                        placeholder="ว่าง (กรอกเอง)"
+                        className="w-24 text-right py-0.5 px-1 border-0 bg-transparent font-mono font-bold text-amber-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none text-xs"
+                        title="กรอกค่าใช้จ่ายอื่นของวันนี้โดยตรง (ถ้าไม่มีให้เว้นว่างไว้)"
                       />
                     </div>
                   </td>
@@ -464,7 +496,13 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
                   ฿{totalPurchaseCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
                 <td className="py-3 px-4 text-right font-mono text-amber-800 text-sm">
-                  ฿{totalOtherCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {totalOtherCost > 0 ? (
+                    `฿${totalOtherCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-sans font-medium bg-white/80 text-slate-400 border border-dashed border-slate-300">
+                      ว่าง
+                    </span>
+                  )}
                 </td>
                 <td className={`py-3 px-4 text-right font-mono text-sm ${
                   netProfit >= 0 ? 'text-emerald-800 font-extrabold' : 'text-rose-800 font-extrabold'
@@ -586,10 +624,10 @@ export const IncomeExpensePage: React.FC<IncomeExpensePageProps> = ({
                 <input
                   type="number"
                   min="1"
-                  step="0.5"
+                  step="any"
                   value={expAmount}
-                  onChange={(e) => setExpAmount(parseFloat(e.target.value) || 0)}
-                  placeholder="0.00"
+                  onChange={(e) => setExpAmount(e.target.value)}
+                  placeholder="กรอกจำนวนเงิน (บาท)"
                   className="w-full px-3 py-2 text-xs font-bold border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#b2dfdb] outline-none"
                   required
                 />

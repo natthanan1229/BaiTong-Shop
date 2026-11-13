@@ -342,11 +342,59 @@ export class SupabaseService {
   }
 
   // ================= 5. หน้ารายได้ค่าใช้จ่าย (Summary_Expans_TB: วิเคราะห์จาก Inventory_TB & บันทึกค่าใช้จ่ายอื่น) =================
+  async clearOtherExpenseForDate(date: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('Summary_Expans_TB')
+        .delete()
+        .eq('Ex_Date', date)
+        .not('Ex_Other', 'is', null);
+
+      if (error) {
+        console.warn('Supabase clearOtherExpenseForDate warning:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase clearOtherExpenseForDate failed:', err);
+      return false;
+    }
+  }
+
+  async deleteExpenseById(id: string): Promise<boolean> {
+    try {
+      const numId = parseInt(id, 10);
+      if (!isNaN(numId)) {
+        await supabase
+          .from('Summary_Expans_TB')
+          .delete()
+          .eq('Ex_ID', numId);
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase deleteExpenseById failed:', err);
+      return false;
+    }
+  }
+
   async saveOtherExpense(expense: ExpenseRecord): Promise<boolean> {
     try {
+      if (expense.date) {
+        // Clean up any existing other expense for this date first to avoid duplicates
+        await supabase
+          .from('Summary_Expans_TB')
+          .delete()
+          .eq('Ex_Date', expense.date)
+          .not('Ex_Other', 'is', null);
+      }
+
+      if (!expense.amount || expense.amount <= 0) {
+        return true;
+      }
+
       const row = {
         Ex_List: expense.title || 'ค่าใช้จ่ายอื่นๆ',
-        Ex_Other: Math.round(expense.amount || 0),
+        Ex_Other: Math.round(expense.amount),
         Ex_Date: expense.date || new Date().toISOString().slice(0, 10),
       };
 
@@ -378,7 +426,7 @@ export class SupabaseService {
         Ex_List: row.description || `สรุปรายการประจำวัน (${row.date})`,
         Ex_Income: Math.round(row.income || 0),
         Ex_Purch: Math.round(row.purchaseCost || 0),
-        Ex_Other: Math.round(row.otherCost || 0),
+        Ex_Other: row.otherCost > 0 ? Math.round(row.otherCost) : null,
         Ex_Pro_Loss: Math.round(row.profit || 0),
         Ex_Date: row.date,
       };
@@ -401,7 +449,7 @@ export class SupabaseService {
   async syncExpenseFromInventory(products: Product[], purchases: PurchaseRecord[]): Promise<boolean> {
     try {
       // Analyze expenses based on purchases and inventory stock cost
-      const totalInventoryCost = products.reduce((sum, p) => sum + (p.stockQty * p.costPrice), 0);
+      const totalInventoryCost = products.reduce((sum, p) => sum + ((p.stockQty || 0) * (p.costPrice || 0)), 0);
       const totalPurchased = purchases.reduce((sum, p) => sum + p.netTotal, 0);
       const amount = Math.round(totalPurchased > 0 ? totalPurchased : totalInventoryCost);
 
@@ -442,7 +490,8 @@ export class SupabaseService {
     try {
       const { data, error } = await supabase
         .from('Summary_Expans_TB')
-        .select('*');
+        .select('*')
+        .not('Ex_Other', 'is', null);
 
       if (error) {
         console.warn('Supabase fetchSummaryExpenses warning:', error.message);
@@ -450,21 +499,21 @@ export class SupabaseService {
       }
 
       if (data && data.length > 0) {
-        return data.map((r: any) => {
-          const otherAmt = Number(r.Ex_Other) || 0;
-          const purchAmt = Number(r.Ex_Purch) || 0;
-          const isOther = otherAmt > 0 || (r.Ex_List && !r.Ex_List.includes('ยอดซื้อ'));
-          return {
-            id: String(r.Ex_ID || 'EXP-' + Date.now()),
-            title: r.Ex_List || (isOther ? 'ค่าใช้จ่ายอื่นๆ' : 'ค่าใช้จ่ายซื้อสินค้า'),
-            amount: isOther ? otherAmt : purchAmt,
-            category: isOther ? 'ค่าใช้จ่ายอื่นๆ' : 'ซื้อสินค้าเข้าร้าน',
-            date: r.Ex_Date || new Date().toISOString().slice(0, 10),
-            createdByName: isOther ? 'บันทึกเอง (Manual Entry)' : 'ระบบประมวลผลอัตโนมัติ (Inventory_TB Analysis)',
-          };
+        const otherExpenseRows = data.filter((r: any) => {
+          const otherAmt = Number(r.Ex_Other);
+          return !isNaN(otherAmt) && otherAmt > 0;
         });
+
+        return otherExpenseRows.map((r: any) => ({
+          id: String(r.Ex_ID),
+          title: r.Ex_List || 'ค่าใช้จ่ายอื่นๆ',
+          amount: Number(r.Ex_Other) || 0,
+          category: 'ค่าใช้จ่ายอื่นๆ',
+          date: r.Ex_Date || new Date().toISOString().slice(0, 10),
+          createdByName: 'บันทึกเอง (Manual Entry)',
+        }));
       }
-      return null;
+      return [];
     } catch (err) {
       console.warn('Supabase fetchSummaryExpenses failed:', err);
       return null;

@@ -673,6 +673,7 @@ export class SupabaseService {
         In_Price_Self: Math.round(item.price || 0),
         S_Sum: Math.round(item.total || (item.quantity * item.price)),
         In_Receipt: sale.receiptNumber,
+        S_Cashier: sale.createdByName || 'ADMIN',
       }));
 
       const { error } = await supabase
@@ -717,6 +718,7 @@ export class SupabaseService {
           const qty = Number(r.In_Qty) || 1;
           const sum = Number(r.S_Sum) || 0;
           const price = Number(r.In_Price_Self) || (qty > 0 ? Math.round(sum / qty) : 0);
+          const cashier = r.S_Cashier || 'ADMIN';
 
           const item: CartItem = {
             barcode: r.In_Bar || '',
@@ -732,7 +734,7 @@ export class SupabaseService {
               receiptNumber: receipt,
               date: r.S_Date || new Date().toISOString().slice(0, 10),
               time: '12:00:00',
-              cashier: 'ADMIN',
+              cashier: cashier,
               items: [item],
               netTotal: sum,
             });
@@ -740,6 +742,9 @@ export class SupabaseService {
             const entry = map.get(receipt)!;
             entry.items.push(item);
             entry.netTotal += sum;
+            if (cashier && cashier !== 'ADMIN') {
+              entry.cashier = cashier;
+            }
           }
         });
 
@@ -754,7 +759,7 @@ export class SupabaseService {
           change: 0,
           bahtText: '',
           createdByName: entry.cashier,
-          createdByRole: 'admin',
+          createdByRole: entry.cashier === 'ADMIN' ? 'admin' : 'user',
         }));
 
         return records;

@@ -37,6 +37,11 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
   const [isSuccessSaved, setIsSuccessSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [supabaseItems, setSupabaseItems] = useState<{ barcode: string; name: string; price: number }[]>([]);
+  const registeredUsers = store.getUsers();
+  const [selectedBuyer, setSelectedBuyer] = useState<string>(() => {
+    if (session.role === 'admin') return 'ADMIN';
+    return session.user?.userId || session.user?.fullName || 'ADMIN';
+  });
 
   React.useEffect(() => {
     supabaseService.selectPurchasingProducts().then(items => {
@@ -142,13 +147,14 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
     const timeStr = now.toTimeString().slice(0, 8);
 
     try {
+      const buyerToSave = selectedBuyer || (session.role === 'admin' ? 'ADMIN' : (session.user?.userId || session.user?.fullName || 'ADMIN'));
       await store.addPurchase({
         date: dateStr,
         time: timeStr,
         items: cartItems,
         netTotal,
-        createdByName: session.role === 'admin' ? 'ADMIN' : (session.user?.fullName || 'ผู้ใช้งาน'),
-        createdByRole: session.role || 'user',
+        createdByName: buyerToSave,
+        createdByRole: buyerToSave === 'ADMIN' ? 'admin' : 'user',
       });
 
       playBeep('cash');
@@ -193,13 +199,31 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => onNavigate('purchase-summary')}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"
-        >
-          <span>ดูประวัติสรุปยอดซื้อสินค้า</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col items-end gap-1">
+            <label className="text-xs text-slate-500 font-medium">แคชเชียร์/ผู้บันทึก:</label>
+            <select
+              value={selectedBuyer}
+              onChange={(e) => setSelectedBuyer(e.target.value)}
+              className="text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-emerald-400 focus:outline-hidden"
+            >
+              <option value="ADMIN">ADMIN (ผู้ดูแลระบบ)</option>
+              {registeredUsers.map(u => (
+                <option key={u.userId} value={u.userId}>
+                  {u.userId} - {u.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => onNavigate('purchase-summary')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"
+          >
+            <span>ดูประวัติสรุปยอดซื้อสินค้า</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Live Operational Status Banner for ADMIN & Users */}

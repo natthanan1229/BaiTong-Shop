@@ -986,6 +986,49 @@ class StoreService {
     return null;
   }
 
+  // ------------------ RESOLVE USER NAME ------------------
+  resolveUserDetails(userIdOrName: string | undefined | null): { name: string; userId?: string } {
+    if (!userIdOrName) return { name: '-' };
+    const trimmed = String(userIdOrName).trim();
+    if (!trimmed || trimmed === '-') return { name: '-' };
+
+    const upper = trimmed.toUpperCase();
+    if (upper === 'ADMIN' || upper === '1229' || upper === 'แอดมิน') {
+      return { name: 'ADMIN', userId: 'ADMIN' };
+    }
+
+    const users = this.getUsers();
+    // 1. Direct match on userId (e.g. BT-10229, BT-25709, BT-60625, BT-28072)
+    const byId = users.find(u => u.userId && u.userId.toUpperCase().trim() === upper);
+    if (byId) {
+      return { name: byId.fullName, userId: byId.userId };
+    }
+
+    // 2. Direct match on email
+    const byEmail = users.find(u => u.email && u.email.toLowerCase().trim() === trimmed.toLowerCase());
+    if (byEmail) {
+      return { name: byEmail.fullName, userId: byEmail.userId };
+    }
+
+    // 3. Match on note / Em_User
+    const byNote = users.find(u => u.note && u.note.trim().toLowerCase() === trimmed.toLowerCase());
+    if (byNote) {
+      return { name: byNote.fullName, userId: byNote.userId };
+    }
+
+    // 4. Match on fullName
+    const byName = users.find(u => u.fullName && u.fullName.trim().toLowerCase() === trimmed.toLowerCase());
+    if (byName) {
+      return { name: byName.fullName, userId: byName.userId };
+    }
+
+    return { name: trimmed };
+  }
+
+  resolveUserName(userIdOrName: string | undefined | null): string {
+    return this.resolveUserDetails(userIdOrName).name;
+  }
+
   // ------------------ AUTH SESSION ------------------
   getAuthSession(): AuthSession {
     const data = localStorage.getItem(STORAGE_KEYS.AUTH);

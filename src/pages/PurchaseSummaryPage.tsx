@@ -148,14 +148,16 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
   };
 
   const exportCsv = () => {
-    const headers = ['Date', 'Name', "Q'ty", 'Unit', 'ราคาต่อหน่วย', 'ยอดรวม', 'ยอดรวมสุทธิ'];
+    const headers = ['Date', 'Barcode', 'Name', "Q'ty", 'Unit', 'ราคาต่อหน่วย', 'ยอดรวม', 'แคชเชียร์', 'ยอดรวมสุทธิ'];
     const rows = filteredRows.map(r => [
       r.date,
+      r.barcode,
       `"${r.name}"`,
       r.qty,
       r.unit,
       r.unitPrice,
       r.total,
+      `"${store.resolveUserName(r.buyer)}"`,
       totalSpent
     ]);
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -365,7 +367,7 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
                 <th className="py-2.5 px-3 text-center w-20">Unit (หน่วย)</th>
                 <th className="py-2.5 px-3 text-right w-28">ราคาต่อหน่วย</th>
                 <th className="py-2.5 px-3 text-right w-28">ยอดรวม</th>
-                <th className="py-2.5 px-3 text-center w-28">ผู้บันทึก</th>
+                <th className="py-2.5 px-3 text-center w-32">แคชเชียร์</th>
                 {isAdmin && (
                   <th className="py-2.5 px-3 text-center w-24 text-rose-700 font-bold">
                     จัดการ (ADMIN)
@@ -401,8 +403,21 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
                     <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800">
                       ฿{row.total.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">
-                      {row.buyer || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    <td className="py-2.5 px-3 text-center text-slate-700">
+                      {row.buyer ? (
+                        <div>
+                          <div className="font-medium text-slate-800">
+                            {store.resolveUserName(row.buyer)}
+                          </div>
+                          {store.resolveUserDetails(row.buyer).userId && store.resolveUserDetails(row.buyer).userId !== store.resolveUserName(row.buyer) && (
+                            <div className="text-[10px] font-mono text-slate-400">
+                              {store.resolveUserDetails(row.buyer).userId}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>
+                      )}
                     </td>
                     {isAdmin && (
                       <td className="py-2.5 px-3 text-center">

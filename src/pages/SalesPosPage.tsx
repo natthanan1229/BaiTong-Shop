@@ -40,6 +40,11 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
   // Completed receipt modal state
   const [completedSale, setCompletedSale] = useState<SaleRecord | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const registeredUsers = store.getUsers();
+  const [selectedCashier, setSelectedCashier] = useState<string>(() => {
+    if (session.role === 'admin') return 'ADMIN';
+    return session.user?.userId || session.user?.fullName || 'ADMIN';
+  });
 
   const netTotal = cartItems.reduce((sum, item) => sum + item.total, 0);
   const numericCash = typeof cashReceived === 'number' ? cashReceived : 0;
@@ -162,6 +167,7 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
     const timeStr = now.toTimeString().slice(0, 8);
 
     try {
+      const cashierToSave = selectedCashier || (session.role === 'admin' ? 'ADMIN' : (session.user?.userId || session.user?.fullName || 'ADMIN'));
       const saleRecord = await store.addSale({
         date: dateStr,
         time: timeStr,
@@ -170,8 +176,8 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
         cashReceived: numericCash,
         change,
         bahtText: thaiBaht,
-        createdByName: session.role === 'admin' ? 'ADMIN' : (session.user?.fullName || 'แคชเชียร์'),
-        createdByRole: session.role || 'user',
+        createdByName: cashierToSave,
+        createdByRole: cashierToSave === 'ADMIN' ? 'admin' : 'user',
       });
 
       playBeep('cash');
@@ -216,11 +222,25 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
           </div>
         </div>
 
-        <div className="text-right">
-          <div className="text-xs text-slate-400">สถานะแคชเชียร์</div>
-          <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>พร้อมขาย ({session.role === 'admin' ? 'ADMIN' : session.user?.fullName})</span>
+        <div className="flex flex-col items-end gap-1">
+          <label className="text-xs text-slate-500 font-medium">แคชเชียร์ผู้ทำรายการ:</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedCashier}
+              onChange={(e) => setSelectedCashier(e.target.value)}
+              className="text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-emerald-400 focus:outline-hidden"
+            >
+              <option value="ADMIN">ADMIN (ผู้ดูแลระบบ)</option>
+              {registeredUsers.map(u => (
+                <option key={u.userId} value={u.userId}>
+                  {u.userId} - {u.fullName}
+                </option>
+              ))}
+            </select>
+            <div className="text-xs font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>พร้อมขาย</span>
+            </div>
           </div>
         </div>
       </div>
@@ -535,7 +555,7 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
                 <p className="text-[11px] text-slate-500 font-sans">ร้านอุปกรณ์เครื่องเขียนและสำนักงาน</p>
                 <div className="text-[10px] text-slate-400 mt-1">เลขที่ใบเสร็จ: {completedSale.receiptNumber}</div>
                 <div className="text-[10px] text-slate-400">วันที่: {completedSale.date} เวลา: {completedSale.time}</div>
-                <div className="text-[10px] text-slate-400">แคชเชียร์: {completedSale.createdByName}</div>
+                <div className="text-[10px] text-slate-600 font-semibold">แคชเชียร์: {store.resolveUserName(completedSale.createdByName)}</div>
               </div>
 
               {/* Items List */}

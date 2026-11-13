@@ -148,7 +148,7 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({
   };
 
   const exportCsv = () => {
-    const headers = ['วันที่', 'เลขที่ใบเสร็จ', 'รหัสสินค้า', 'รายการสินค้า', 'จำนวน', 'หน่วยละ', 'รวม', 'ยอดรวมสุทธิ'];
+    const headers = ['วันที่', 'เลขที่ใบเสร็จ', 'รหัสสินค้า', 'รายการสินค้า', 'จำนวน', 'หน่วยละ', 'รวม', 'แคชเชียร์', 'ยอดรวมสุทธิ'];
     const rows = filteredRows.map(r => [
       r.date,
       r.receiptNumber,
@@ -157,6 +157,7 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({
       r.qty,
       r.unitPrice,
       r.total,
+      `"${store.resolveUserName(r.cashier)}"`,
       totalRevenue
     ]);
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -404,8 +405,21 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({
                     <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
                       ฿{row.total.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-center text-slate-500">
-                      {row.cashier || <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>}
+                    <td className="py-2.5 px-3 text-center text-slate-700">
+                      {row.cashier ? (
+                        <div>
+                          <div className="font-medium text-slate-800">
+                            {store.resolveUserName(row.cashier)}
+                          </div>
+                          {store.resolveUserDetails(row.cashier).userId && store.resolveUserDetails(row.cashier).userId !== store.resolveUserName(row.cashier) && (
+                            <div className="text-[10px] font-mono text-slate-400">
+                              {store.resolveUserDetails(row.cashier).userId}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Empty</span>
+                      )}
                     </td>
                     {isAdmin && (
                       <td className="py-2.5 px-3 text-center">

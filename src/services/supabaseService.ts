@@ -64,14 +64,44 @@ export class SupabaseService {
 
       if (data && data.length > 0) {
         return data.map((row: any) => {
-          const cost = Number(row.In_Count_Cost_IN) || 0;
-          const sell = Number(row.In_PriceSum) || Number(row.In_Count_Self) || 0;
-          const receivedQty = Number(row.In_Price_Cost) || 0;
-          const soldQty = Number(row.In_Price_Self) || 0;
-          // Requirement: In_Price_Cost - In_Price_Self = In_Qty
-          const stockQty = row.In_Qty !== null && row.In_Qty !== undefined 
-            ? Number(row.In_Qty) 
-            : Math.max(0, receivedQty - soldQty);
+          // Rule 1: In_Count_Cost_IN เป็นค่าว่างจนกว่าจะมีการซื้อเข้ามา
+          const countIn = row.In_Count_Cost_IN !== null && row.In_Count_Cost_IN !== undefined 
+            ? Number(row.In_Count_Cost_IN) 
+            : null;
+          // Rule 2: In_Price_Cost คือราคาต้นทุนต่อหน่วย
+          const cost = Number(row.In_Price_Cost) || 0;
+          const sumCost = countIn !== null 
+            ? (row.In_Sum_Cost !== null && row.In_Sum_Cost !== undefined ? Number(row.In_Sum_Cost) : countIn * cost)
+            : null;
+
+          // Rule 3: In_Count_Self เป็นค่าว่างจนกว่าจะมีการขาย
+          const countSold = row.In_Count_Self !== null && row.In_Count_Self !== undefined 
+            ? Number(row.In_Count_Self) 
+            : null;
+          // Rule 4: In_Price_Self คือราคาขายต่อหน่วย
+          const sell = Number(row.In_Price_Self) || 0;
+          const sumSold = countSold !== null 
+            ? (row.In_Sum_Self !== null && row.In_Sum_Self !== undefined ? Number(row.In_Sum_Self) : countSold * sell)
+            : null;
+
+          // Rule 5: In_Qty คือ จำนวนที่อ้างอิงมาจาก In_Count_Cost_IN (หักลบยอดขาย In_Count_Self)
+          const stockQty = countIn !== null 
+            ? (row.In_Qty !== null && row.In_Qty !== undefined ? Number(row.In_Qty) : Math.max(0, countIn - (countSold || 0)))
+            : null;
+
+          // Rule 6: In_PriceSum แสดงข้อมูลอ้างอิงจาก In_Price_Cost
+          const priceSum = row.In_PriceSum !== null && row.In_PriceSum !== undefined 
+            ? Number(row.In_PriceSum) 
+            : cost;
+
+          // Rule 7: In_SumSelf คือ ผลรวมจาก In_Qty * In_PriceSum
+          const sumStock = stockQty !== null 
+            ? (row.In_SumSelf !== null && row.In_SumSelf !== undefined ? Number(row.In_SumSelf) : stockQty * priceSum)
+            : null;
+
+          const status = stockQty !== null 
+            ? (row.In_Status || (stockQty < 12 ? 'สั่งซื้อ' : 'ปกติ')) 
+            : null;
 
           return {
             id: String(row.In_ID || row.In_Bar),
@@ -80,15 +110,23 @@ export class SupabaseService {
             unit: row.In_Unit || '',
             costPrice: cost,
             sellPrice: sell,
-            receivedQty: receivedQty,
-            receivedTotal: Number(row.In_Sum_Cost) || (receivedQty * cost),
-            soldQty: soldQty,
-            soldTotal: Number(row.In_Sum_Self) || (soldQty * sell),
+            countCostIn: countIn,
+            sumCost: sumCost,
+            countSelf: countSold,
+            sumSelfCost: sumSold,
             lastSaleDate: row.In_Date_Self || null,
             stockQty: stockQty,
-            stockTotal: Number(row.In_SumSelf) || (stockQty * sell),
+            priceSum: priceSum,
+            sumStock: sumStock,
             lastReceipt: row.In_Receipt || null,
-            status: row.In_Status || (stockQty < 12 ? 'สั่งซื้อ' : 'ปกติ'),
+            status: status,
+
+            // Compatibility fields
+            receivedQty: countIn,
+            receivedTotal: sumCost,
+            soldQty: countSold,
+            soldTotal: sumSold,
+            stockTotal: sumStock,
           };
         });
       }
@@ -103,10 +141,32 @@ export class SupabaseService {
     try {
       const cost = product.costPrice || 0;
       const sell = product.sellPrice || 0;
-      const received = product.receivedQty !== undefined ? product.receivedQty : (product.stockQty + (product.soldQty || 0));
-      const sold = product.soldQty || 0;
-      // Requirement: In_Price_Cost - In_Price_Self = In_Qty
-      const stock = Math.max(0, received - sold);
+
+      // Rule 1 & 2: In_Count_Cost_IN & In_Sum_Cost
+      const countIn = product.countCostIn !== undefined 
+        ? product.countCostIn 
+        : (product.receivedQty !== undefined ? product.receivedQty : null);
+      const sumCost = countIn !== null ? (product.sumCost ?? countIn * cost) : null;
+
+      // Rule 3 & 4: In_Count_Self & In_Sum_Self
+      const countSold = product.countSelf !== undefined 
+        ? product.countSelf 
+        : (product.soldQty !== undefined && product.soldQty !== null && product.soldQty > 0 ? product.soldQty : null);
+      const sumSold = countSold !== null ? (product.sumSelfCost ?? countSold * sell) : null;
+
+      // Rule 5: In_Qty คือ จำนวนที่อ้างอิงมาจาก In_Count_Cost_IN (หักลบยอดขายถ้ามี)
+      const stock = countIn !== null 
+        ? (product.stockQty !== undefined && product.stockQty !== null 
+            ? product.stockQty 
+            : Math.max(0, countIn - (countSold || 0)))
+        : null;
+
+      // Rule 6: In_PriceSum แสดงข้อมูลอ้างอิงจาก In_Price_Cost
+      const priceSum = product.priceSum !== undefined && product.priceSum !== null ? product.priceSum : cost;
+
+      // Rule 7: In_SumSelf คือ ผลรวมจาก In_Qty * In_PriceSum
+      const sumStock = stock !== null ? (product.sumStock ?? stock * priceSum) : null;
+
       const idNum = parseInt(product.id, 10) || (product.barcode ? parseInt(product.barcode.replace(/\D/g, ''), 10) : 1);
 
       const row: any = {
@@ -114,18 +174,18 @@ export class SupabaseService {
         In_Bar: product.barcode,
         In_Menu: product.name,
         In_Unit: product.unit || '',
-        In_Count_Cost_IN: cost,
-        In_Price_Cost: received,                 // ยอดรับเข้าสะสม (เชื่อมจากหน้ารายการซื้อ)
-        In_Sum_Cost: received * cost,
-        In_Count_Self: sell,
-        In_Price_Self: sold,                     // ยอดขายออกสะสม (เชื่อมจากหน้าขาย POS)
-        In_Sum_Self: sold * sell,
-        In_Date_Self: product.lastSaleDate || null,
-        In_Qty: stock,                           // In_Price_Cost - In_Price_Self
-        In_PriceSum: sell,
-        In_SumSelf: stock * sell,
-        In_Receipt: product.lastReceipt || null,
-        In_Status: product.status || (stock < 12 ? 'สั่งซื้อ' : 'ปกติ'),
+        In_Count_Cost_IN: countIn,                                 // ว่างจนกว่าจะมีการซื้อเข้ามา
+        In_Price_Cost: cost,                                       // ราคาต้นทุนต่อหน่วย
+        In_Sum_Cost: sumCost,                                      // In_Count_Cost_IN * In_Price_Cost
+        In_Count_Self: countSold,                                  // ว่างจนกว่าจะมีการขาย
+        In_Price_Self: sell,                                       // ราคาขายต่อหน่วย
+        In_Sum_Self: sumSold,                                      // In_Count_Self * In_Price_Self
+        In_Date_Self: countSold !== null ? (product.lastSaleDate || null) : null,
+        In_Qty: stock,                                             // อ้างอิง In_Count_Cost_IN (หักลดเมื่อขาย)
+        In_PriceSum: priceSum,                                     // อ้างอิง In_Price_Cost
+        In_SumSelf: sumStock,                                      // In_Qty * In_PriceSum
+        In_Receipt: countSold !== null ? (product.lastReceipt || null) : null,
+        In_Status: stock !== null ? (product.status || (stock < 12 ? 'สั่งซื้อ' : 'ปกติ')) : null,
       };
 
       const { error } = await supabase

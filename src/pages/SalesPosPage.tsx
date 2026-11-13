@@ -58,12 +58,13 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
     }
 
     // Check available stock
+    const availableStock = product.stockQty !== null && product.stockQty !== undefined ? product.stockQty : 0;
     const existingInCart = cartItems.find(item => item.barcode === product.barcode);
     const currentQtyInCart = existingInCart ? existingInCart.quantity : 0;
-    if (product.stockQty <= currentQtyInCart) {
+    if (availableStock <= currentQtyInCart) {
       playBeep('error');
       setScanMessage({ 
-        text: `สินค้า "${product.name}" คงเหลือในคลังเพียง ${product.stockQty} ${product.unit} (ไม่พอขาย)`, 
+        text: `สินค้า "${product.name}" คงเหลือในคลังเพียง ${availableStock} ${product.unit} (ไม่พอขาย)`, 
         type: 'error' 
       });
       return;
@@ -93,7 +94,7 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
             price: product.sellPrice, // selling at retail price
             quantity: 1,
             total: product.sellPrice,
-            stockAvailable: product.stockQty
+            stockAvailable: availableStock
           }
         ];
       }
@@ -115,8 +116,9 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
       return;
     }
     const product = products.find(p => p.barcode === barcode);
-    if (product && newQty > product.stockQty) {
-      alert(`สินค้าในคลังมีเพียง ${product.stockQty} ${product.unit}`);
+    const availableStock = product ? (product.stockQty !== null && product.stockQty !== undefined ? product.stockQty : 0) : 0;
+    if (product && newQty > availableStock) {
+      alert(`สินค้าในคลังมีเพียง ${availableStock} ${product.unit}`);
       return;
     }
 

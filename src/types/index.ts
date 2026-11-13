@@ -1,21 +1,37 @@
 export interface Product {
-  id: string;               // In_ID
-  barcode: string;          // In_Bar
-  name: string;             // In_Menu
-  unit: string;             // In_Unit
-  costPrice: number;        // In_Count_Cost_IN (ราคาต้นทุน)
-  receivedQty?: number;     // In_Price_Cost (ยอดรับเข้าสะสม เชื่อมหน้ารายการซื้อ)
-  receivedTotal?: number;   // In_Sum_Cost (รวมต้นทุนรับเข้า = In_Price_Cost * In_Count_Cost_IN)
-  sellPrice: number;        // In_Count_Self / In_PriceSum (ราคาขาย)
-  soldQty?: number;         // In_Price_Self (ยอดขายออกสะสม เชื่อมหน้าขาย POS)
-  soldTotal?: number;       // In_Sum_Self (รวมยอดขาย = In_Price_Self * In_Count_Self)
-  lastSaleDate?: string | null;  // In_Date_Self (วันที่ขายล่าสุด)
-  stockQty: number;         // In_Qty (In_Price_Cost - In_Price_Self)
-  stockTotal?: number;      // In_SumSelf (รวมมูลค่าคงเหลือ = In_Qty * In_PriceSum)
-  lastReceipt?: string | null;   // In_Receipt (เลขที่ใบเสร็จล่าสุด)
-  status?: string;          // In_Status (สั่งซื้อ / ปกติ)
-  imageUrl?: string;        // รูปภาพสินค้า
+  id: string;                     // In_ID
+  barcode: string;                // In_Bar
+  name: string;                   // In_Menu
+  unit: string;                   // In_Unit
+
+  // 1. รับสินค้า (In_Count_Cost_IN, In_Price_Cost, In_Sum_Cost)
+  countCostIn?: number | null;    // In_Count_Cost_IN: จำนวนรับเข้า (ว่างถ้ายังไม่มีการซื้อเข้ามา)
+  costPrice: number;              // In_Price_Cost: ราคาต่อหน่วยต้นทุน
+  sumCost?: number | null;        // In_Sum_Cost: In_Count_Cost_IN * In_Price_Cost (ว่างถ้า In_Count_Cost_IN ว่าง)
+
+  // 2. ขายสินค้า (In_Count_Self, In_Price_Self, In_Sum_Self)
+  countSelf?: number | null;      // In_Count_Self: จำนวนขายออก (ว่างถ้ายังไม่มีการขาย)
+  sellPrice: number;              // In_Price_Self: ราคาขายต่อหน่วย
+  sumSelfCost?: number | null;    // In_Sum_Self: In_Count_Self * In_Price_Self (ว่างถ้า In_Count_Self ว่าง)
+  lastSaleDate?: string | null;   // In_Date_Self: ว/ด/ป ขายล่าสุด (ว่างถ้ายังไม่มีการขาย)
+
+  // 3. คงเหลือ (In_Qty, In_PriceSum, In_SumSelf)
+  stockQty?: number | null;       // In_Qty: อ้างอิงจาก In_Count_Cost_IN (หักลดด้วย In_Count_Self เมื่อมีการขาย)
+  priceSum?: number;              // In_PriceSum: แสดงข้อมูลอ้างอิงจาก In_Price_Cost
+  sumStock?: number | null;       // In_SumSelf: In_Qty * In_PriceSum (ว่างถ้า In_Qty ว่าง)
+
+  // 4. ข้อมูลกำกับ
+  lastReceipt?: string | null;    // In_Receipt: เลขที่ใบเสร็จล่าสุด (ว่างถ้ายังไม่มีการขาย)
+  status?: string | null;         // In_Status: ว่างถ้ายังไม่มียอดซื้อ หรือ 'สั่งซื้อ' / 'ปกติ'
+  imageUrl?: string;              // รูปภาพสินค้า
   category?: string;
+
+  // Compatibility fields for legacy references
+  receivedQty?: number | null;
+  receivedTotal?: number | null;
+  soldQty?: number | null;
+  soldTotal?: number | null;
+  stockTotal?: number | null;
 }
 
 export interface CartItem {

@@ -95,12 +95,34 @@ class StoreService {
     const products = this.getProducts();
     const newId = (products.length > 0 ? Math.max(...products.map(p => parseInt(p.id) || 0)) + 1 : 1).toString();
     const config = this.getFormulaConfig();
+    const cost = product.costPrice || 0;
+    const sell = product.sellPrice || 0;
+    const countIn = product.countCostIn !== undefined ? product.countCostIn : (product.receivedQty !== undefined ? product.receivedQty : null);
+    const sumCost = countIn !== null ? countIn * cost : null;
+    const countSold = product.countSelf ?? null;
+    const sumSold = countSold !== null ? countSold * sell : null;
+    const stock = countIn !== null ? Math.max(0, countIn - (countSold || 0)) : null;
+    const priceSum = cost;
+    const sumStock = stock !== null ? stock * priceSum : null;
+
     const newProduct: Product = {
       ...product,
       id: newId,
-      receivedQty: product.receivedQty ?? product.stockQty,
-      soldQty: product.soldQty ?? 0,
-      status: product.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ'
+      costPrice: cost,
+      sellPrice: sell,
+      countCostIn: countIn,
+      sumCost: sumCost,
+      countSelf: countSold,
+      sumSelfCost: sumSold,
+      stockQty: stock,
+      priceSum: priceSum,
+      sumStock: sumStock,
+      status: stock !== null ? (stock < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ') : null,
+      receivedQty: countIn,
+      receivedTotal: sumCost,
+      soldQty: countSold,
+      soldTotal: sumSold,
+      stockTotal: sumStock,
     };
     const updated = [newProduct, ...products];
     this.saveProducts(updated);
@@ -116,10 +138,33 @@ class StoreService {
     const config = this.getFormulaConfig();
     const idx = products.findIndex(p => p.id === updatedProduct.id || p.barcode === updatedProduct.barcode);
     if (idx !== -1) {
-      const stock = updatedProduct.stockQty;
+      const cost = updatedProduct.costPrice || 0;
+      const sell = updatedProduct.sellPrice || 0;
+      const countIn = updatedProduct.countCostIn !== undefined ? updatedProduct.countCostIn : (updatedProduct.receivedQty ?? null);
+      const sumCost = countIn !== null ? countIn * cost : null;
+      const countSold = updatedProduct.countSelf !== undefined ? updatedProduct.countSelf : (updatedProduct.soldQty ?? null);
+      const sumSold = countSold !== null ? countSold * sell : null;
+      const stock = countIn !== null ? Math.max(0, countIn - (countSold || 0)) : null;
+      const priceSum = cost;
+      const sumStock = stock !== null ? stock * priceSum : null;
+
       const finalProduct: Product = {
         ...updatedProduct,
-        status: stock < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ'
+        costPrice: cost,
+        sellPrice: sell,
+        countCostIn: countIn,
+        sumCost: sumCost,
+        countSelf: countSold,
+        sumSelfCost: sumSold,
+        stockQty: stock,
+        priceSum: priceSum,
+        sumStock: sumStock,
+        status: stock !== null ? (stock < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ') : null,
+        receivedQty: countIn,
+        receivedTotal: sumCost,
+        soldQty: countSold,
+        soldTotal: sumSold,
+        stockTotal: sumStock,
       };
       products[idx] = finalProduct;
       this.saveProducts(products);
@@ -180,23 +225,26 @@ class StoreService {
     const updated = [newRecord, ...purchases];
     localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(updated));
 
-    // Update Inventory Stock (บันทึกรับสินค้าจากยอดซื้อสินค้า)
+    // Update Inventory Stock (Rule 1 & 2: In_Count_Cost_IN & In_Sum_Cost)
     const products = this.getProducts();
     const config = this.getFormulaConfig();
     purchase.items.forEach(item => {
       const prod = products.find(p => p.barcode === item.barcode);
       if (prod) {
         const cost = prod.costPrice || 0;
-        const sell = prod.sellPrice || 0;
-        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
-        prod.receivedQty = received + item.quantity;
-        prod.receivedTotal = prod.receivedQty * cost;
-        prod.soldQty = prod.soldQty || 0;
-        prod.soldTotal = prod.soldQty * sell;
-        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
-        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
-        prod.stockTotal = prod.stockQty * sell;
+        const countIn = (prod.countCostIn || 0) + item.quantity;
+        const countSold = prod.countSelf || 0;
+        prod.countCostIn = countIn;
+        prod.sumCost = countIn * cost;
+        prod.stockQty = Math.max(0, countIn - countSold);
+        prod.priceSum = cost;
+        prod.sumStock = prod.stockQty * cost;
         prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+
+        prod.receivedQty = countIn;
+        prod.receivedTotal = prod.sumCost;
+        prod.stockTotal = prod.sumStock;
+
         // Sync each modified item to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
       }
@@ -235,20 +283,39 @@ class StoreService {
     const actualQty = qty || item.quantity;
     const itemName = item.name;
 
-    // 1. Deduct Inventory Stock (ปรับลดยอดรับเข้าออกจากคลังสินค้า)
+    // 1. Deduct Inventory Stock (ปรับลดยอดรับเข้าออกจากคลังสินค้า: In_Count_Cost_IN)
     if (deductStock) {
       const products = this.getProducts();
       const config = this.getFormulaConfig();
       const prod = products.find(p => p.barcode === barcode);
       if (prod) {
-        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
-        prod.receivedQty = Math.max(0, received - actualQty);
-        prod.soldQty = prod.soldQty || 0;
-        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
-        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
-        prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+        const cost = prod.costPrice || 0;
+        const currentIn = prod.countCostIn || 0;
+        const countIn = Math.max(0, currentIn - actualQty);
+        const countSold = prod.countSelf || 0;
+
+        if (countIn <= 0) {
+          prod.countCostIn = null;
+          prod.sumCost = null;
+          prod.stockQty = null;
+          prod.sumStock = null;
+          prod.status = null;
+          prod.receivedQty = null;
+          prod.receivedTotal = null;
+          prod.stockTotal = null;
+        } else {
+          prod.countCostIn = countIn;
+          prod.sumCost = countIn * cost;
+          prod.stockQty = Math.max(0, countIn - countSold);
+          prod.priceSum = cost;
+          prod.sumStock = prod.stockQty * cost;
+          prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+          prod.receivedQty = countIn;
+          prod.receivedTotal = prod.sumCost;
+          prod.stockTotal = prod.sumStock;
+        }
+
         this.saveProducts(products);
-        // Sync modified product to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
       }
     }
@@ -288,12 +355,32 @@ class StoreService {
       purchase.items.forEach(item => {
         const prod = products.find(p => p.barcode === item.barcode);
         if (prod) {
-          const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
-          prod.receivedQty = Math.max(0, received - item.quantity);
-          prod.soldQty = prod.soldQty || 0;
-          // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
-          prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
-          prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+          const cost = prod.costPrice || 0;
+          const currentIn = prod.countCostIn || 0;
+          const countIn = Math.max(0, currentIn - item.quantity);
+          const countSold = prod.countSelf || 0;
+
+          if (countIn <= 0) {
+            prod.countCostIn = null;
+            prod.sumCost = null;
+            prod.stockQty = null;
+            prod.sumStock = null;
+            prod.status = null;
+            prod.receivedQty = null;
+            prod.receivedTotal = null;
+            prod.stockTotal = null;
+          } else {
+            prod.countCostIn = countIn;
+            prod.sumCost = countIn * cost;
+            prod.stockQty = Math.max(0, countIn - countSold);
+            prod.priceSum = cost;
+            prod.sumStock = prod.stockQty * cost;
+            prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+            prod.receivedQty = countIn;
+            prod.receivedTotal = prod.sumCost;
+            prod.stockTotal = prod.sumStock;
+          }
+
           supabaseService.saveInventoryItem(prod).catch(() => {});
         }
       });
@@ -334,7 +421,7 @@ class StoreService {
     const updated = [newRecord, ...sales];
     localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(updated));
 
-    // Deduct Inventory Stock (บันทึกจ่ายจากยอดขายสินค้า เชื่อม In_Price_Self)
+    // Deduct Inventory Stock (Rule 3 & 4: In_Count_Self & In_Sum_Self)
     const products = this.getProducts();
     const config = this.getFormulaConfig();
     sale.items.forEach(item => {
@@ -342,17 +429,29 @@ class StoreService {
       if (prod) {
         const cost = prod.costPrice || 0;
         const sell = prod.sellPrice || 0;
-        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
-        prod.receivedQty = received;
-        prod.receivedTotal = prod.receivedQty * cost;
-        prod.soldQty = (prod.soldQty || 0) + item.quantity;
-        prod.soldTotal = prod.soldQty * sell;
+        const countSold = (prod.countSelf || 0) + item.quantity;
+        prod.countSelf = countSold;
+        prod.sumSelfCost = countSold * sell;
         prod.lastSaleDate = sale.date;
         prod.lastReceipt = receiptNumber;
-        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
-        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
-        prod.stockTotal = prod.stockQty * sell;
-        prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+
+        // Rule 5: In_Qty คือ จำนวนที่อ้างอิงมาจาก In_Count_Cost_IN (หักลดเมื่อขาย)
+        if (prod.countCostIn !== null && prod.countCostIn !== undefined) {
+          prod.stockQty = Math.max(0, prod.countCostIn - countSold);
+          prod.priceSum = cost;
+          prod.sumStock = prod.stockQty * cost;
+          prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+        } else {
+          prod.stockQty = null;
+          prod.priceSum = cost;
+          prod.sumStock = null;
+          prod.status = null;
+        }
+
+        prod.soldQty = countSold;
+        prod.soldTotal = prod.sumSelfCost;
+        prod.stockTotal = prod.sumStock;
+
         // Sync item update to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
       }
@@ -397,14 +496,39 @@ class StoreService {
       const config = this.getFormulaConfig();
       const prod = products.find(p => p.barcode === barcode);
       if (prod) {
-        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
-        prod.receivedQty = received;
-        prod.soldQty = Math.max(0, (prod.soldQty || 0) - actualQty);
-        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
-        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
-        prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+        const cost = prod.costPrice || 0;
+        const sell = prod.sellPrice || 0;
+        const currentSold = prod.countSelf || 0;
+        const countSold = Math.max(0, currentSold - actualQty);
+
+        if (countSold <= 0) {
+          prod.countSelf = null;
+          prod.sumSelfCost = null;
+          prod.lastSaleDate = null;
+          prod.lastReceipt = null;
+          prod.soldQty = null;
+          prod.soldTotal = null;
+        } else {
+          prod.countSelf = countSold;
+          prod.sumSelfCost = countSold * sell;
+          prod.soldQty = countSold;
+          prod.soldTotal = prod.sumSelfCost;
+        }
+
+        if (prod.countCostIn !== null && prod.countCostIn !== undefined) {
+          prod.stockQty = Math.max(0, prod.countCostIn - (countSold || 0));
+          prod.priceSum = cost;
+          prod.sumStock = prod.stockQty * cost;
+          prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+        } else {
+          prod.stockQty = null;
+          prod.priceSum = cost;
+          prod.sumStock = null;
+          prod.status = null;
+        }
+        prod.stockTotal = prod.sumStock;
+
         this.saveProducts(products);
-        // Sync item update to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
       }
     }
@@ -449,12 +573,38 @@ class StoreService {
       sale.items.forEach(item => {
         const prod = products.find(p => p.barcode === item.barcode);
         if (prod) {
-          const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
-          prod.receivedQty = received;
-          prod.soldQty = Math.max(0, (prod.soldQty || 0) - item.quantity);
-          // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
-          prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
-          prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+          const cost = prod.costPrice || 0;
+          const sell = prod.sellPrice || 0;
+          const currentSold = prod.countSelf || 0;
+          const countSold = Math.max(0, currentSold - item.quantity);
+
+          if (countSold <= 0) {
+            prod.countSelf = null;
+            prod.sumSelfCost = null;
+            prod.lastSaleDate = null;
+            prod.lastReceipt = null;
+            prod.soldQty = null;
+            prod.soldTotal = null;
+          } else {
+            prod.countSelf = countSold;
+            prod.sumSelfCost = countSold * sell;
+            prod.soldQty = countSold;
+            prod.soldTotal = prod.sumSelfCost;
+          }
+
+          if (prod.countCostIn !== null && prod.countCostIn !== undefined) {
+            prod.stockQty = Math.max(0, prod.countCostIn - (countSold || 0));
+            prod.priceSum = cost;
+            prod.sumStock = prod.stockQty * cost;
+            prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
+          } else {
+            prod.stockQty = null;
+            prod.priceSum = cost;
+            prod.sumStock = null;
+            prod.status = null;
+          }
+          prod.stockTotal = prod.sumStock;
+
           supabaseService.saveInventoryItem(prod).catch(() => {});
         }
       });
@@ -757,10 +907,31 @@ class StoreService {
   }
 
   private applyFormulas(products: Product[], config: FormulaConfig): Product[] {
-    return products.map(p => ({
-      ...p,
-      status: p.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ'
-    }));
+    return products.map(p => {
+      const cost = p.costPrice || 0;
+      const countIn = p.countCostIn !== undefined ? p.countCostIn : (p.receivedQty !== undefined ? p.receivedQty : null);
+      const countSold = p.countSelf !== undefined ? p.countSelf : (p.soldQty && p.soldQty > 0 ? p.soldQty : null);
+      const stock = countIn !== null ? Math.max(0, countIn - (countSold || 0)) : null;
+      const priceSum = p.priceSum !== undefined && p.priceSum !== null ? p.priceSum : cost;
+      const sumStock = stock !== null ? stock * priceSum : null;
+
+      return {
+        ...p,
+        countCostIn: countIn,
+        sumCost: countIn !== null ? countIn * cost : null,
+        countSelf: countSold,
+        sumSelfCost: countSold !== null ? countSold * (p.sellPrice || 0) : null,
+        stockQty: stock,
+        priceSum: priceSum,
+        sumStock: sumStock,
+        status: stock !== null ? (stock < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ') : null,
+        receivedQty: countIn,
+        receivedTotal: countIn !== null ? countIn * cost : null,
+        soldQty: countSold,
+        soldTotal: countSold !== null ? countSold * (p.sellPrice || 0) : null,
+        stockTotal: sumStock,
+      };
+    });
   }
 }
 

@@ -233,11 +233,11 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
       'In_Bar (รหัส)',
       'In_Menu (รายการ)',
       'In_Unit (หน่วยนับ)',
-      'In_Price_Cost (รับ_จำนวน)',
-      'In_Count_Cost_IN (รับ_ราคา)',
+      'In_Count_Cost_IN (รับ_จำนวน)',
+      'In_Price_Cost (รับ_ราคาต้นทุน)',
       'In_Sum_Cost (รับ_รวม)',
-      'In_Price_Self (ขาย_จำนวน)',
-      'In_Count_Self (ขาย_ราคา)',
+      'In_Count_Self (ขาย_จำนวน)',
+      'In_Price_Self (ขาย_ราคาขาย)',
       'In_Sum_Self (ขาย_รวม)',
       'In_Date_Self (ว/ด/ป ขายล่าสุด)',
       'In_Qty (คงเหลือ_จำนวน)',
@@ -246,24 +246,34 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
       'In_Receipt (เลขที่ใบเสร็จ)',
       'In_Status (สถานะสินค้า)'
     ];
-    const rows = products.map((p, idx) => [
-      p.id || idx + 1,
-      p.barcode || 'Empty',
-      `"${p.name || 'Empty'}"`,
-      p.unit || 'Empty',
-      p.receivedQty !== undefined ? p.receivedQty : 'Empty',
-      p.costPrice !== undefined ? p.costPrice : 'Empty',
-      p.receivedTotal !== undefined ? p.receivedTotal : (p.receivedQty || 0) * (p.costPrice || 0),
-      p.soldQty !== undefined ? p.soldQty : 'Empty',
-      p.sellPrice !== undefined ? p.sellPrice : 'Empty',
-      p.soldTotal !== undefined ? p.soldTotal : (p.soldQty || 0) * (p.sellPrice || 0),
-      p.lastSaleDate || 'Empty',
-      p.stockQty !== undefined ? p.stockQty : 'Empty',
-      p.sellPrice !== undefined ? p.sellPrice : 'Empty',
-      p.stockTotal !== undefined ? p.stockTotal : (p.stockQty || 0) * (p.sellPrice || 0),
-      p.lastReceipt || 'Empty',
-      p.status || 'Empty'
-    ]);
+    const rows = products.map((p, idx) => {
+      const countIn = p.countCostIn !== null && p.countCostIn !== undefined ? p.countCostIn : (p.receivedQty ?? null);
+      const sumCost = countIn !== null ? (p.sumCost ?? countIn * (p.costPrice || 0)) : null;
+      const countSold = p.countSelf !== null && p.countSelf !== undefined ? p.countSelf : (p.soldQty && p.soldQty > 0 ? p.soldQty : null);
+      const sumSold = countSold !== null ? (p.sumSelfCost ?? countSold * (p.sellPrice || 0)) : null;
+      const stock = countIn !== null ? (p.stockQty !== null && p.stockQty !== undefined ? p.stockQty : Math.max(0, countIn - (countSold || 0))) : null;
+      const priceSum = p.priceSum !== null && p.priceSum !== undefined ? p.priceSum : (p.costPrice || 0);
+      const sumStock = stock !== null ? (p.sumStock ?? stock * priceSum) : null;
+
+      return [
+        p.id || idx + 1,
+        p.barcode || 'Empty',
+        `"${p.name || 'Empty'}"`,
+        p.unit || 'Empty',
+        countIn !== null ? countIn : 'Empty',
+        p.costPrice !== undefined ? p.costPrice : 'Empty',
+        sumCost !== null ? sumCost : 'Empty',
+        countSold !== null ? countSold : 'Empty',
+        p.sellPrice !== undefined ? p.sellPrice : 'Empty',
+        sumSold !== null ? sumSold : 'Empty',
+        p.lastSaleDate || 'Empty',
+        stock !== null ? stock : 'Empty',
+        priceSum !== undefined ? priceSum : 'Empty',
+        sumStock !== null ? sumStock : 'Empty',
+        p.lastReceipt || 'Empty',
+        p.status || 'Empty'
+      ];
+    });
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -300,11 +310,11 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   ฐานข้อมูล: Inventory_TB
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#e0f2f1] text-[#004d40] border border-[#80cbc4]">
-                  In_Price_Cost - In_Price_Self = In_Qty
+                  In_Count_Cost_IN * In_Price_Cost = In_Sum_Cost | In_Qty = In_Count_Cost_IN - In_Count_Self
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                สูตรคำนวณ: In_Price_Cost (ยอดรับเข้าสะสม) - In_Price_Self (ยอดขายออกสะสม) = In_Qty (คงเหลือในสต็อก)
+                สูตรคำนวณ 7 ช่อง: รับสินค้า (In_Count_Cost_IN * In_Price_Cost = In_Sum_Cost) | ขาย (In_Count_Self * In_Price_Self = In_Sum_Self) | คงเหลือ In_Qty อ้างอิง In_Count_Cost_IN (หักลด In_Count_Self), In_PriceSum อ้างอิง In_Price_Cost, รวม In_SumSelf = In_Qty * In_PriceSum
               </p>
             </div>
           </div>
@@ -472,13 +482,13 @@ ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
                 <th rowSpan={2} className="py-2.5 px-4 border-r border-slate-200 text-left min-w-[140px]" title="In_Menu">รายการ</th>
                 <th rowSpan={2} className="py-2.5 px-2 border-r border-slate-200 w-16" title="In_Unit">หน่วยนับ</th>
                 <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#e0f2f1] text-[#004d40]">
-                  รับสินค้า (In_Price_Cost)
+                  รับสินค้า (In_Count_Cost_IN & In_Price_Cost)
                 </th>
                 <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#fff3e0] text-[#e65100]">
-                  ขายสินค้า (In_Price_Self)
+                  ขายสินค้า (In_Count_Self & In_Price_Self)
                 </th>
                 <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#d0f8ce]/60 text-[#1b5e20]">
-                  คงเหลือ (In_Qty)
+                  คงเหลือ (In_Qty & In_PriceSum)
                 </th>
                 <th rowSpan={2} className="py-2.5 px-2.5 border-r border-slate-200 w-24 text-slate-700 font-semibold" title="In_Date_Self">
                   ว/ด/ป ขาย
@@ -491,15 +501,15 @@ ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
               </tr>
               {/* Row 2 Subheaders matching Excel Sheet 2 & Supabase Inventory_TB */}
               <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 text-center font-medium">
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80 font-bold" title="In_Price_Cost">จำนวน</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80" title="In_Count_Cost_IN">ราคา</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80" title="In_Sum_Cost">รวม</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80 font-bold" title="In_Price_Self">จำนวน</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80" title="In_Count_Self">ราคา</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80" title="In_Sum_Self">รวม</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80 font-bold" title="In_Qty = In_Price_Cost - In_Price_Self">จำนวน</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80" title="In_PriceSum">ราคา</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80 font-bold" title="In_SumSelf">รวม</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80 font-bold" title="In_Count_Cost_IN (จะแสดงค่าเมื่อมีการซื้อสินค้าเข้ามา มิฉะนั้นว่าง)">จำนวน</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80" title="In_Price_Cost (ราคาต่อหน่วยต้นทุน)">ราคา</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80" title="In_Sum_Cost = In_Count_Cost_IN * In_Price_Cost">รวม</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80 font-bold" title="In_Count_Self (จะแสดงค่าเมื่อมีการขายสินค้า มิฉะนั้นว่าง)">จำนวน</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80" title="In_Price_Self (ราคาขายต่อหน่วย)">ราคา</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80" title="In_Sum_Self = In_Count_Self * In_Price_Self">รวม</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80 font-bold" title="In_Qty (อ้างอิง In_Count_Cost_IN หักลบ In_Count_Self)">จำนวน</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80" title="In_PriceSum (แสดงข้อมูลอ้างอิงจาก In_Price_Cost)">ราคา</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80 font-bold" title="In_SumSelf = In_Qty * In_PriceSum">รวม</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -511,12 +521,19 @@ ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
                 </tr>
               ) : (
                 filteredProducts.map((p, idx) => {
-                  const receivedQty = p.receivedQty !== undefined ? p.receivedQty : (p.stockQty + (p.soldQty || 0));
-                  const receivedTotal = p.receivedTotal !== undefined ? p.receivedTotal : (receivedQty * (p.costPrice || 0));
-                  const soldQty = p.soldQty !== undefined ? p.soldQty : 0;
-                  const soldTotal = p.soldTotal !== undefined ? p.soldTotal : (soldQty * (p.sellPrice || 0));
-                  const stockTotal = p.stockTotal !== undefined ? p.stockTotal : (p.stockQty * (p.sellPrice || 0));
-                  const isLow = p.status === 'สั่งซื้อ';
+                  const countIn = p.countCostIn !== null && p.countCostIn !== undefined ? p.countCostIn : (p.receivedQty ?? null);
+                  const cost = p.costPrice || 0;
+                  const sumCost = countIn !== null ? (p.sumCost ?? countIn * cost) : null;
+
+                  const countSold = p.countSelf !== null && p.countSelf !== undefined ? p.countSelf : (p.soldQty && p.soldQty > 0 ? p.soldQty : null);
+                  const sell = p.sellPrice || 0;
+                  const sumSold = countSold !== null ? (p.sumSelfCost ?? countSold * sell) : null;
+
+                  const stockQty = countIn !== null ? (p.stockQty !== null && p.stockQty !== undefined ? p.stockQty : Math.max(0, countIn - (countSold || 0))) : null;
+                  const priceSum = p.priceSum !== null && p.priceSum !== undefined ? p.priceSum : cost;
+                  const sumStock = stockQty !== null ? (p.sumStock ?? stockQty * priceSum) : null;
+
+                  const isLow = stockQty !== null && stockQty < 12;
 
                   return (
                     <tr 
@@ -538,39 +555,39 @@ ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
                         {renderEmpty(p.unit)}
                       </td>
 
-                      {/* รับสินค้า (In_Price_Cost, In_Count_Cost_IN, In_Sum_Cost) */}
+                      {/* รับสินค้า (In_Count_Cost_IN, In_Price_Cost, In_Sum_Cost) */}
                       <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-700 font-medium">
-                        {renderEmpty(receivedQty)}
+                        {renderEmpty(countIn)}
                       </td>
                       <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-600">
-                        {renderEmpty(p.costPrice, '฿')}
+                        {renderEmpty(cost, '฿')}
                       </td>
                       <td className="py-2 px-2 text-right border-r border-slate-200 font-mono text-slate-700">
-                        {renderEmpty(receivedTotal ? receivedTotal.toLocaleString() : (receivedTotal === 0 ? '0' : null), '฿')}
+                        {renderEmpty(sumCost !== null ? sumCost.toLocaleString() : null, '฿')}
                       </td>
 
-                      {/* ขายสินค้า (In_Price_Self, In_Count_Self, In_Sum_Self) */}
+                      {/* ขายสินค้า (In_Count_Self, In_Price_Self, In_Sum_Self) */}
                       <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-700 font-medium">
-                        {renderEmpty(soldQty)}
+                        {renderEmpty(countSold)}
                       </td>
                       <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-600">
-                        {renderEmpty(p.sellPrice, '฿')}
+                        {renderEmpty(sell, '฿')}
                       </td>
                       <td className="py-2 px-2 text-right border-r border-slate-200 font-mono text-slate-700">
-                        {renderEmpty(soldTotal ? soldTotal.toLocaleString() : (soldTotal === 0 ? '0' : null), '฿')}
+                        {renderEmpty(sumSold !== null ? sumSold.toLocaleString() : null, '฿')}
                       </td>
 
                       {/* คงเหลือ (In_Qty, In_PriceSum, In_SumSelf) */}
                       <td className={`py-2 px-2 text-right border-r border-slate-200 font-bold ${
-                        p.stockQty === 0 ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-emerald-700'
+                        stockQty === null ? '' : stockQty === 0 ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-emerald-700'
                       }`}>
-                        {renderEmpty(p.stockQty)}
+                        {renderEmpty(stockQty)}
                       </td>
                       <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-600">
-                        {renderEmpty(p.sellPrice, '฿')}
+                        {renderEmpty(priceSum, '฿')}
                       </td>
                       <td className="py-2 px-2 text-right border-r border-slate-200 font-mono font-bold text-slate-800">
-                        {renderEmpty(stockTotal ? stockTotal.toLocaleString() : (stockTotal === 0 ? '0' : null), '฿')}
+                        {renderEmpty(sumStock !== null ? sumStock.toLocaleString() : null, '฿')}
                       </td>
 
                       {/* วันที่ขายล่าสุด (In_Date_Self) */}
@@ -585,7 +602,7 @@ ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
 
                       {/* สถานะสินค้า (In_Status) */}
                       <td className="py-2 px-2 text-center border-r border-slate-200">
-                        {!p.status ? renderEmpty(null) : isLow ? (
+                        {stockQty === null ? renderEmpty(null) : isLow ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-[11px]">
                             <AlertTriangle className="w-3 h-3" />
                             สั่งซื้อ

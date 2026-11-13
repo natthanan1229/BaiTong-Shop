@@ -11,7 +11,8 @@ import {
   X,
   Store,
   CreditCard,
-  Volume2
+  Volume2,
+  Database
 } from 'lucide-react';
 import { Product, CartItem, SaleRecord, AuthSession } from '../types';
 import { store } from '../services/store';
@@ -192,7 +193,13 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
             <DollarSign className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">4. ระบบขายสินค้า (POS Cashier)</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">4. ระบบขายสินค้า (POS Cashier)</h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                <Database className="w-3 h-3" />
+                Inventory_TB (ช่องจำนวนขาย เชื่อม In_Price_Self)
+              </span>
+            </div>
             <p className="text-xs text-slate-500">
               สแกนบาร์โค้ดขายสินค้าออก แสดงรายการสินค้าระบุจำนวนและราคา คำนวณราคาสุทธิ และคำนวณเงินทอน
             </p>
@@ -315,7 +322,10 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
                     <th className="py-2 px-2">Barcode</th>
                     <th className="py-2 px-3">รายการสินค้า</th>
                     <th className="py-2 px-2 text-center w-16">หน่วยละ</th>
-                    <th className="py-2 px-2 text-center w-24">จำนวน</th>
+                    <th className="py-2 px-2 text-center w-32 bg-amber-100/60 border-x border-amber-200">
+                      <span>จำนวน</span>
+                      <span className="block text-[10px] text-amber-800 font-mono font-normal">➔ เชื่อม In_Price_Self</span>
+                    </th>
                     <th className="py-2 px-2 text-right w-20">รวม</th>
                     <th className="py-2 px-1 text-center w-10">ลบ</th>
                   </tr>

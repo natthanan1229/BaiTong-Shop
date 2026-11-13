@@ -262,9 +262,12 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   <Database className="w-3 h-3" />
                   ฐานข้อมูล: Inventory_TB
                 </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#e0f2f1] text-[#004d40] border border-[#80cbc4]">
+                  In_Price_Cost - In_Price_Self = In_Qty
+                </span>
               </div>
               <p className="text-xs text-slate-500">
-                บันทึกรับสินค้าจากยอดซื้อและบันทึกจ่ายจากยอดขาย ยอดคงเหลือไม่ตั้งเป็นศูนย์อัตโนมัติ และสามารถลบสินค้าได้
+                สูตรคำนวณ: In_Price_Cost (ยอดรับเข้าสะสม) - In_Price_Self (ยอดขายออกสะสม) = In_Qty (คงเหลือในสต็อก)
               </p>
             </div>
           </div>
@@ -431,21 +434,27 @@ ALTER TABLE "Summary_Self_TB" DISABLE ROW LEVEL SECURITY;`}
                 <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 w-20">รหัส</th>
                 <th rowSpan={2} className="py-2.5 px-4 border-r border-slate-200 text-left min-w-[160px]">รายการ</th>
                 <th rowSpan={2} className="py-2.5 px-2 border-r border-slate-200 w-16">หน่วยนับ</th>
-                <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#e0f2f1] text-[#004d40]">รับสินค้า</th>
-                <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#fff3e0] text-[#e65100]">ขายสินค้า</th>
-                <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#d0f8ce]/60 text-[#1b5e20]">คงเหลือ</th>
+                <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#e0f2f1] text-[#004d40]">
+                  รับสินค้า (In_Price_Cost)
+                </th>
+                <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#fff3e0] text-[#e65100]">
+                  ขายสินค้า (In_Price_Self)
+                </th>
+                <th colSpan={3} className="py-1.5 px-3 border-r border-slate-200 bg-[#d0f8ce]/60 text-[#1b5e20]">
+                  คงเหลือ (In_Qty)
+                </th>
                 <th rowSpan={2} className="py-2.5 px-3 border-r border-slate-200 w-24">สถานะสินค้า</th>
                 <th rowSpan={2} className="py-2.5 px-2 w-20">จัดการ</th>
               </tr>
               {/* Row 2 Subheaders matching Excel Sheet 2 */}
               <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 text-center font-medium">
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80">จำนวน</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80 font-bold" title="เชื่อมโยงจากหน้ารายการซื้อ (In_Price_Cost)">จำนวน (Cost)</th>
                 <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80">ราคา</th>
                 <th className="py-1.5 px-2 border-r border-slate-200 bg-[#e0f2f1]/80">รวม</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80">จำนวน</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80 font-bold" title="เชื่อมโยงจากหน้าขาย POS (In_Price_Self)">จำนวน (Self)</th>
                 <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80">ราคา</th>
                 <th className="py-1.5 px-2 border-r border-slate-200 bg-[#fff3e0]/80">รวม</th>
-                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80 font-bold">จำนวน</th>
+                <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80 font-bold" title="In_Price_Cost - In_Price_Self = In_Qty">จำนวน (Qty)</th>
                 <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80">ราคา</th>
                 <th className="py-1.5 px-2 border-r border-slate-200 bg-[#d0f8ce]/80 font-bold">รวม</th>
               </tr>

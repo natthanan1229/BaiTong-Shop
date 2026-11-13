@@ -170,11 +170,16 @@ class StoreService {
 
     // Update Inventory Stock (บันทึกรับสินค้าจากยอดซื้อสินค้า)
     const products = this.getProducts();
+    const config = this.getFormulaConfig();
     purchase.items.forEach(item => {
       const prod = products.find(p => p.barcode === item.barcode);
       if (prod) {
-        prod.stockQty = (prod.stockQty || 0) + item.quantity;
-        prod.receivedQty = (prod.receivedQty || 0) + item.quantity;
+        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
+        prod.receivedQty = received + item.quantity;
+        prod.soldQty = prod.soldQty || 0;
+        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+        prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
         // Sync each modified item to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
       }
@@ -216,10 +221,15 @@ class StoreService {
     // 1. Deduct Inventory Stock (ปรับลดยอดรับเข้าออกจากคลังสินค้า)
     if (deductStock) {
       const products = this.getProducts();
+      const config = this.getFormulaConfig();
       const prod = products.find(p => p.barcode === barcode);
       if (prod) {
-        prod.stockQty = Math.max(0, (prod.stockQty || 0) - actualQty);
-        prod.receivedQty = Math.max(0, (prod.receivedQty || 0) - actualQty);
+        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
+        prod.receivedQty = Math.max(0, received - actualQty);
+        prod.soldQty = prod.soldQty || 0;
+        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+        prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
         this.saveProducts(products);
         // Sync modified product to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
@@ -257,11 +267,16 @@ class StoreService {
 
     if (deductStock) {
       const products = this.getProducts();
+      const config = this.getFormulaConfig();
       purchase.items.forEach(item => {
         const prod = products.find(p => p.barcode === item.barcode);
         if (prod) {
-          prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.quantity);
-          prod.receivedQty = Math.max(0, (prod.receivedQty || 0) - item.quantity);
+          const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
+          prod.receivedQty = Math.max(0, received - item.quantity);
+          prod.soldQty = prod.soldQty || 0;
+          // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+          prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+          prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
           supabaseService.saveInventoryItem(prod).catch(() => {});
         }
       });
@@ -302,13 +317,18 @@ class StoreService {
     const updated = [newRecord, ...sales];
     localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(updated));
 
-    // Deduct Inventory Stock (บันทึกจ่ายจากยอดขายสินค้า)
+    // Deduct Inventory Stock (บันทึกจ่ายจากยอดขายสินค้า เชื่อม In_Price_Self)
     const products = this.getProducts();
+    const config = this.getFormulaConfig();
     sale.items.forEach(item => {
       const prod = products.find(p => p.barcode === item.barcode);
       if (prod) {
-        prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.quantity);
+        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
+        prod.receivedQty = received;
         prod.soldQty = (prod.soldQty || 0) + item.quantity;
+        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+        prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
         // Sync item update to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
       }
@@ -350,10 +370,15 @@ class StoreService {
     // 1. Restore Inventory Stock in store and Supabase Inventory_TB
     if (restoreStock) {
       const products = this.getProducts();
+      const config = this.getFormulaConfig();
       const prod = products.find(p => p.barcode === barcode);
       if (prod) {
-        prod.stockQty = (prod.stockQty || 0) + actualQty;
+        const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
+        prod.receivedQty = received;
         prod.soldQty = Math.max(0, (prod.soldQty || 0) - actualQty);
+        // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+        prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+        prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
         this.saveProducts(products);
         // Sync item update to Supabase Inventory_TB
         supabaseService.saveInventoryItem(prod).catch(() => {});
@@ -396,11 +421,16 @@ class StoreService {
     // Restore stock for all items
     if (restoreStock) {
       const products = this.getProducts();
+      const config = this.getFormulaConfig();
       sale.items.forEach(item => {
         const prod = products.find(p => p.barcode === item.barcode);
         if (prod) {
-          prod.stockQty = (prod.stockQty || 0) + item.quantity;
+          const received = prod.receivedQty !== undefined ? prod.receivedQty : (prod.stockQty + (prod.soldQty || 0));
+          prod.receivedQty = received;
           prod.soldQty = Math.max(0, (prod.soldQty || 0) - item.quantity);
+          // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+          prod.stockQty = Math.max(0, prod.receivedQty - prod.soldQty);
+          prod.status = prod.stockQty < config.reorderThreshold ? 'สั่งซื้อ' : 'ปกติ';
           supabaseService.saveInventoryItem(prod).catch(() => {});
         }
       });
@@ -442,7 +472,41 @@ class StoreService {
     };
     const updated = [newRecord, ...expenses];
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(updated));
+
+    // Sync to Supabase Summary_Expans_TB (Ex_Other)
+    supabaseService.saveOtherExpense(newRecord).catch(() => {});
+
     return newRecord;
+  }
+
+  async setOtherExpenseForDate(date: string, amount: number, title?: string): Promise<ExpenseRecord> {
+    const expenses = this.getExpenses();
+    const existingIdx = expenses.findIndex(e => e.date === date && (e.category === 'ค่าใช้จ่ายอื่นๆ' || e.title.includes('ค่าใช้จ่ายอื่น') || e.title.includes('บันทึกเอง')));
+    let record: ExpenseRecord;
+
+    if (existingIdx !== -1) {
+      expenses[existingIdx] = {
+        ...expenses[existingIdx],
+        amount,
+        title: title || expenses[existingIdx].title,
+      };
+      record = expenses[existingIdx];
+    } else {
+      record = {
+        id: 'EXP-' + Date.now(),
+        date,
+        title: title || `ค่าใช้จ่ายอื่นๆ (${date})`,
+        category: 'ค่าใช้จ่ายอื่นๆ',
+        amount,
+        createdByName: 'บันทึกเอง (Manual Entry)',
+      };
+      expenses.unshift(record);
+    }
+
+    this.saveExpenses(expenses);
+    // Sync to Supabase Summary_Expans_TB
+    supabaseService.saveOtherExpense(record).catch(() => {});
+    return record;
   }
 
   saveExpenses(expenses: ExpenseRecord[]): void {

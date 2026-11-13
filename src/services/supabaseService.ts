@@ -62,16 +62,25 @@ export class SupabaseService {
       }
 
       if (data && data.length > 0) {
-        return data.map((row: any) => ({
-          id: String(row.In_ID || row.In_Bar),
-          barcode: row.In_Bar,
-          name: row.In_Menu,
-          unit: row.In_Unit || 'อัน',
-          costPrice: Number(row.In_Price_Cost) || 0,
-          sellPrice: Number(row.In_PriceSum) || 0,
-          stockQty: Number(row.In_Qty) || 0,
-          status: row.In_Status || (Number(row.In_Qty) < 12 ? 'สั่งซื้อ' : 'ปกติ'),
-        }));
+        return data.map((row: any) => {
+          const receivedQty = Number(row.In_Price_Cost) || 0;
+          const soldQty = Number(row.In_Price_Self) || 0;
+          // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+          const stockQty = Math.max(0, receivedQty - soldQty);
+
+          return {
+            id: String(row.In_ID || row.In_Bar),
+            barcode: row.In_Bar,
+            name: row.In_Menu,
+            unit: row.In_Unit || 'อัน',
+            costPrice: Number(row.In_Count_Cost_IN) || Math.round((Number(row.In_PriceSum) || 15) * 0.7) || 10,
+            sellPrice: Number(row.In_PriceSum) || 0,
+            receivedQty: receivedQty,
+            soldQty: soldQty,
+            stockQty: stockQty,
+            status: row.In_Status || (stockQty < 12 ? 'สั่งซื้อ' : 'ปกติ'),
+          };
+        });
       }
       return null;
     } catch (err) {
@@ -82,15 +91,23 @@ export class SupabaseService {
 
   async saveInventoryItem(product: Product): Promise<boolean> {
     try {
-      const row: InventoryRow = {
+      const received = product.receivedQty !== undefined ? product.receivedQty : (product.stockQty + (product.soldQty || 0));
+      const sold = product.soldQty || 0;
+      // Requirement 1: In_Price_Cost - In_Price_Self = In_Qty
+      const stock = Math.max(0, received - sold);
+
+      const row: any = {
         In_Bar: product.barcode,
         In_Menu: product.name,
         In_Unit: product.unit,
-        In_Qty: product.stockQty,
-        In_Price_Cost: product.costPrice,
+        In_Price_Cost: received,     // In_Price_Cost = ยอดรับเข้าสะสม (เชื่อมจากหน้ารายการซื้อ)
+        In_Price_Self: sold,         // In_Price_Self = ยอดขายออกสะสม (เชื่อมจากหน้าขาย POS)
+        In_Qty: String(stock),       // In_Qty = In_Price_Cost - In_Price_Self
         In_PriceSum: product.sellPrice,
-        In_Sum_Cost: product.stockQty * product.costPrice,
-        In_Status: product.status || (product.stockQty < 12 ? 'สั่งซื้อ' : 'ปกติ'),
+        In_Sum_Cost: String(received * (product.costPrice || 10)),
+        In_Sum_Self: String(sold * (product.sellPrice || 15)),
+        In_SumSelf: String(stock * (product.sellPrice || 15)),
+        In_Status: product.status || (stock < 12 ? 'สั่งซื้อ' : 'ปกติ'),
       };
 
       const { error } = await supabase
@@ -246,7 +263,63 @@ export class SupabaseService {
     }
   }
 
-  // ================= 5. หน้ารายได้ค่าใช้จ่าย (Summary_Expans_TB: วิเคราะห์จาก Inventory_TB) =================
+  // ================= 5. หน้ารายได้ค่าใช้จ่าย (Summary_Expans_TB: วิเคราะห์จาก Inventory_TB & บันทึกค่าใช้จ่ายอื่น) =================
+  async saveOtherExpense(expense: ExpenseRecord): Promise<boolean> {
+    try {
+      const row = {
+        Ex_List: expense.title || 'ค่าใช้จ่ายอื่นๆ',
+        Ex_Other: Math.round(expense.amount || 0),
+        Ex_Date: expense.date || new Date().toISOString().slice(0, 10),
+      };
+
+      const { error } = await supabase
+        .from('Summary_Expans_TB')
+        .insert(row);
+
+      if (error) {
+        console.warn('Supabase saveOtherExpense error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase saveOtherExpense failed:', err);
+      return false;
+    }
+  }
+
+  async saveDailySummaryExpense(row: {
+    date: string;
+    description: string;
+    income: number;
+    purchaseCost: number;
+    otherCost: number;
+    profit: number;
+  }): Promise<boolean> {
+    try {
+      const payload = {
+        Ex_List: row.description || `สรุปรายการประจำวัน (${row.date})`,
+        Ex_Income: Math.round(row.income || 0),
+        Ex_Purch: Math.round(row.purchaseCost || 0),
+        Ex_Other: Math.round(row.otherCost || 0),
+        Ex_Pro_Loss: Math.round(row.profit || 0),
+        Ex_Date: row.date,
+      };
+
+      const { error } = await supabase
+        .from('Summary_Expans_TB')
+        .insert(payload);
+
+      if (error) {
+        console.warn('Supabase saveDailySummaryExpense error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase saveDailySummaryExpense failed:', err);
+      return false;
+    }
+  }
+
   async syncExpenseFromInventory(products: Product[], purchases: PurchaseRecord[]): Promise<boolean> {
     try {
       // Analyze expenses based on purchases and inventory stock cost
@@ -299,14 +372,19 @@ export class SupabaseService {
       }
 
       if (data && data.length > 0) {
-        return data.map((r: any) => ({
-          id: String(r.Ex_ID || 'EXP-' + Date.now()),
-          title: r.Ex_List || 'ค่าใช้จ่ายซื้อสินค้า',
-          amount: Number(r.Ex_Purch) || 0,
-          category: 'ซื้อสินค้าเข้าร้าน',
-          date: r.Ex_Date || new Date().toISOString().slice(0, 10),
-          createdByName: 'ระบบประมวลผลอัตโนมัติ (Inventory_TB Analysis)',
-        }));
+        return data.map((r: any) => {
+          const otherAmt = Number(r.Ex_Other) || 0;
+          const purchAmt = Number(r.Ex_Purch) || 0;
+          const isOther = otherAmt > 0 || (r.Ex_List && !r.Ex_List.includes('ยอดซื้อ'));
+          return {
+            id: String(r.Ex_ID || 'EXP-' + Date.now()),
+            title: r.Ex_List || (isOther ? 'ค่าใช้จ่ายอื่นๆ' : 'ค่าใช้จ่ายซื้อสินค้า'),
+            amount: isOther ? otherAmt : purchAmt,
+            category: isOther ? 'ค่าใช้จ่ายอื่นๆ' : 'ซื้อสินค้าเข้าร้าน',
+            date: r.Ex_Date || new Date().toISOString().slice(0, 10),
+            createdByName: isOther ? 'บันทึกเอง (Manual Entry)' : 'ระบบประมวลผลอัตโนมัติ (Inventory_TB Analysis)',
+          };
+        });
       }
       return null;
     } catch (err) {

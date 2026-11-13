@@ -176,7 +176,7 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
               <h1 className="text-lg font-bold text-slate-800">2. ระบบซื้อสินค้า (Purchasing System)</h1>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#b2dfdb]/40 text-[#00796b] border border-[#b2dfdb]">
                 <Database className="w-3 h-3" />
-                Inventory_TB (SELECT In_Bar, In_Menu, In_Price)
+                Inventory_TB (ช่องจำนวน Q'ty เชื่อม In_Price_Cost)
               </span>
             </div>
             <p className="text-xs text-slate-500">
@@ -314,7 +314,10 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
                 <th className="py-2.5 px-4">ชื่อสินค้า</th>
                 <th className="py-2.5 px-2 w-16 text-center">หน่วยนับ</th>
                 <th className="py-2.5 px-3 w-28 text-right">ราคาต้นทุน (บาท)</th>
-                <th className="py-2.5 px-3 w-28 text-center">จำนวน (Q'ty)</th>
+                <th className="py-2.5 px-3 w-36 text-center bg-emerald-50/80">
+                  <span>จำนวน (Q'ty)</span>
+                  <span className="block text-[10px] text-emerald-800 font-mono font-normal">➔ เชื่อม In_Price_Cost</span>
+                </th>
                 <th className="py-2.5 px-3 w-28 text-right">รวมเป็นเงิน</th>
                 <th className="py-2.5 px-2 w-16 text-center">ลบ</th>
               </tr>

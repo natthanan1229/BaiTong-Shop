@@ -32,7 +32,33 @@ class StoreService {
         }
       }
 
-      // 2. Fetch Employee_TB from Supabase
+      // 2. Fetch Summary_Purch_TB from Supabase (Purchases sync across all machines)
+      const remotePurchases = await supabaseService.fetchSummaryPurchases();
+      if (remotePurchases !== null && remotePurchases.length > 0) {
+        this.savePurchases(remotePurchases);
+      } else {
+        const localPurchases = this.getPurchases();
+        if (localPurchases.length > 0) {
+          for (const p of localPurchases) {
+            await supabaseService.recordPurchaseToSummaryPurch(p);
+          }
+        }
+      }
+
+      // 3. Fetch Summary_Self_TB from Supabase (Sales sync across all machines)
+      const remoteSales = await supabaseService.fetchSummarySales();
+      if (remoteSales !== null && remoteSales.length > 0) {
+        this.saveSales(remoteSales);
+      } else {
+        const localSales = this.getSales();
+        if (localSales.length > 0) {
+          for (const s of localSales) {
+            await supabaseService.recordSaleToSummarySelf(s);
+          }
+        }
+      }
+
+      // 4. Fetch Employee_TB from Supabase
       const remoteEmployees = await supabaseService.fetchEmployees();
       if (remoteEmployees && remoteEmployees.length > 0) {
         this.saveUsers(remoteEmployees);
@@ -43,23 +69,53 @@ class StoreService {
         }
       }
 
-      // 3. Fetch Summary_Expans_TB from Supabase
+      // 5. Fetch Summary_Expans_TB from Supabase
       const remoteExpenses = await supabaseService.fetchSummaryExpenses();
       if (remoteExpenses !== null) {
         this.saveExpenses(remoteExpenses);
       }
 
-      // 4. Real-time Subscription to Inventory_TB (Cross-device instant sync)
-      supabase
-        .channel('public:Inventory_TB_realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'Inventory_TB' }, async () => {
-          const fresh = await supabaseService.fetchInventory();
-          if (fresh && fresh.length > 0) {
-            this.saveProducts(fresh);
-            window.dispatchEvent(new CustomEvent('inventory-updated'));
-          }
-        })
-        .subscribe();
+      // 6. Real-time Subscription to all tables (Cross-device instant sync)
+      if (!this.isInitialized) {
+        supabase
+          .channel('public:db_realtime_all')
+          .on('postgres_changes', { event: '*', schema: 'public' }, async (payload) => {
+            const table = payload.table;
+            if (table === 'Inventory_TB') {
+              const fresh = await supabaseService.fetchInventory();
+              if (fresh && fresh.length > 0) {
+                this.saveProducts(fresh);
+                window.dispatchEvent(new CustomEvent('inventory-updated'));
+              }
+            } else if (table === 'Summary_Purch_TB') {
+              const freshPurchases = await supabaseService.fetchSummaryPurchases();
+              if (freshPurchases !== null) {
+                this.savePurchases(freshPurchases);
+                window.dispatchEvent(new CustomEvent('purchases-updated'));
+              }
+            } else if (table === 'Summary_Self_TB') {
+              const freshSales = await supabaseService.fetchSummarySales();
+              if (freshSales !== null) {
+                this.saveSales(freshSales);
+                window.dispatchEvent(new CustomEvent('sales-updated'));
+              }
+            } else if (table === 'Summary_Expans_TB') {
+              const freshExp = await supabaseService.fetchSummaryExpenses();
+              if (freshExp !== null) {
+                this.saveExpenses(freshExp);
+                window.dispatchEvent(new CustomEvent('expenses-updated'));
+              }
+            } else if (table === 'Employee_TB') {
+              const freshUsers = await supabaseService.fetchEmployees();
+              if (freshUsers !== null) {
+                this.saveUsers(freshUsers);
+                window.dispatchEvent(new CustomEvent('users-updated'));
+              }
+            }
+            window.dispatchEvent(new CustomEvent('data-refreshed'));
+          })
+          .subscribe();
+      }
 
       this.isInitialized = true;
     } catch (err) {
@@ -254,6 +310,9 @@ class StoreService {
     // Sync to Supabase Summary_Expans_TB (วิเคราะห์ค่าใช้จ่ายจาก Inventory_TB และยอดซื้อ)
     supabaseService.syncExpenseFromInventory(products, updated).catch(() => {});
 
+    // Sync to Supabase Summary_Purch_TB (บันทึกยอดซื้อสินค้าเพื่อให้ทุกเครื่องเห็นข้อมูลตรงกัน)
+    supabaseService.recordPurchaseToSummaryPurch(newRecord).catch(() => {});
+
     return newRecord;
   }
 
@@ -329,7 +388,10 @@ class StoreService {
     }
     this.savePurchases(purchases);
 
-    // 3. Sync to Supabase Summary_Expans_TB
+    // 3. Delete from Supabase Summary_Purch_TB
+    supabaseService.deleteSummaryPurchaseItem(purchaseId, barcode).catch(() => {});
+
+    // 4. Sync to Supabase Summary_Expans_TB
     const currentProducts = this.getProducts();
     supabaseService.syncExpenseFromInventory(currentProducts, purchases).catch(() => {});
 
@@ -389,6 +451,9 @@ class StoreService {
 
     const updated = purchases.filter(p => p.id !== purchaseId);
     this.savePurchases(updated);
+
+    // Sync deletion to Supabase Summary_Purch_TB
+    supabaseService.deleteSummaryPurchaseReceipt(purchaseId).catch(() => {});
 
     const currentProducts = this.getProducts();
     supabaseService.syncExpenseFromInventory(currentProducts, updated).catch(() => {});

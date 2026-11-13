@@ -38,7 +38,7 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // Flatten items for table display matching Excel Total Sales Sheet
+  // Flatten items for table display matching Excel Total Sales Sheet & Supabase Summary_Self_TB
   const allRows: Array<{
     receiptNumber: string;
     date: string;
@@ -52,22 +52,43 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({
     cashier: string;
   }> = [];
 
-  sales.forEach(s => {
-    s.items.forEach(item => {
-      allRows.push({
-        receiptNumber: s.receiptNumber,
-        date: s.date,
-        time: s.time,
-        barcode: item.barcode,
-        name: item.name,
-        qty: item.quantity,
-        unit: item.unit,
-        unitPrice: item.price,
-        total: item.total,
-        cashier: s.createdByName,
+  if (sales && sales.length > 0) {
+    sales.forEach(s => {
+      s.items.forEach(item => {
+        allRows.push({
+          receiptNumber: s.receiptNumber,
+          date: s.date,
+          time: s.time,
+          barcode: item.barcode,
+          name: item.name,
+          qty: item.quantity,
+          unit: item.unit,
+          unitPrice: item.price,
+          total: item.total,
+          cashier: s.createdByName,
+        });
       });
     });
-  });
+  } else {
+    // Seamless fallback to Inventory_TB sold items
+    const soldProds = store.getProducts().filter(p => p.countSelf && p.countSelf > 0);
+    soldProds.forEach(prod => {
+      const qty = prod.countSelf || 0;
+      const price = prod.sellPrice || 0;
+      allRows.push({
+        receiptNumber: prod.lastReceipt || 'RC-INV-' + prod.barcode,
+        date: prod.lastSaleDate || new Date().toISOString().slice(0, 10),
+        time: '12:00:00',
+        barcode: prod.barcode,
+        name: prod.name,
+        qty: qty,
+        unit: prod.unit || 'ชิ้น',
+        unitPrice: price,
+        total: prod.sumSelfCost ?? (qty * price),
+        cashier: 'ADMIN',
+      });
+    });
+  }
 
   // Filter rows
   const filteredRows = allRows.filter(row => {

@@ -39,7 +39,7 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // Flatten items for table display matching Excel Total Purchase Sheet
+  // Flatten items for table display matching Excel Total Purchase Sheet & Supabase Summary_Purch_TB / Inventory_TB
   const allRows: Array<{
     purchaseId: string;
     date: string;
@@ -53,22 +53,43 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
     buyer: string;
   }> = [];
 
-  purchases.forEach(p => {
-    p.items.forEach(item => {
-      allRows.push({
-        purchaseId: p.id,
-        date: p.date,
-        time: p.time,
-        barcode: item.barcode,
-        name: item.name,
-        qty: item.quantity,
-        unit: item.unit,
-        unitPrice: item.price,
-        total: item.total,
-        buyer: p.createdByName,
+  if (purchases && purchases.length > 0) {
+    purchases.forEach(p => {
+      p.items.forEach(item => {
+        allRows.push({
+          purchaseId: p.id,
+          date: p.date,
+          time: p.time,
+          barcode: item.barcode,
+          name: item.name,
+          qty: item.quantity,
+          unit: item.unit,
+          unitPrice: item.price,
+          total: item.total,
+          buyer: p.createdByName,
+        });
       });
     });
-  });
+  } else {
+    // Seamless fallback to Inventory_TB when countCostIn > 0
+    const currentProducts = store.getProducts().filter(p => p.countCostIn && p.countCostIn > 0);
+    currentProducts.forEach(prod => {
+      const qty = prod.countCostIn || 0;
+      const price = prod.costPrice || 0;
+      allRows.push({
+        purchaseId: 'PO-INV-' + prod.barcode,
+        date: new Date().toISOString().slice(0, 10),
+        time: '10:00:00',
+        barcode: prod.barcode,
+        name: prod.name,
+        qty: qty,
+        unit: prod.unit || 'ชิ้น',
+        unitPrice: price,
+        total: prod.sumCost ?? (qty * price),
+        buyer: 'ADMIN',
+      });
+    });
+  }
 
   // Filter rows
   const filteredRows = allRows.filter(row => {

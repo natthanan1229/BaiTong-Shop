@@ -47,15 +47,26 @@ export const App: React.FC = () => {
       });
     });
 
-    // 3. Periodic cloud sync every 8 seconds (ensures cross-device consistency)
+    // 3. Custom events from store real-time cross-device sync
+    const handleSyncEvent = () => refreshData();
+    window.addEventListener('inventory-updated', handleSyncEvent);
+    window.addEventListener('purchases-updated', handleSyncEvent);
+    window.addEventListener('sales-updated', handleSyncEvent);
+    window.addEventListener('data-refreshed', handleSyncEvent);
+
+    // 4. Periodic cloud sync every 4 seconds (ensures cross-device consistency)
     const interval = setInterval(() => {
       store.syncWithSupabase().then(() => {
         refreshData();
       });
-    }, 8000);
+    }, 4000);
 
     return () => {
       unsubscribe();
+      window.removeEventListener('inventory-updated', handleSyncEvent);
+      window.removeEventListener('purchases-updated', handleSyncEvent);
+      window.removeEventListener('sales-updated', handleSyncEvent);
+      window.removeEventListener('data-refreshed', handleSyncEvent);
       clearInterval(interval);
     };
   }, [session]);

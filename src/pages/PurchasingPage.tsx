@@ -41,7 +41,7 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
     supabaseService.selectPurchasingProducts().then(items => {
       if (items && items.length > 0) setSupabaseItems(items);
     });
-  }, []);
+  }, [products]);
 
   // Scan or add item
   const handleScanBarcode = (barcodeToScan?: string) => {

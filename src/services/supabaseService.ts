@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Product, RegisteredUser, PurchaseRecord, SaleRecord, ExpenseRecord } from '../types';
+import { Product, RegisteredUser, PurchaseRecord, SaleRecord, ExpenseRecord, CartItem } from '../types';
 
 export const SUPABASE_URL = 'https://xpyltldpeqsqijsbhdpf.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_RJQasgP4Z2sSsNGMDEqGFQ_-KI6l1lq';
@@ -248,12 +248,152 @@ export class SupabaseService {
     }
   }
 
-  // ================= 3. หน้าสรุปยอดซื้อสินค้า (Purchase Summary: SELECT In_Date, In_Bar, In_Menu, In_Qty, In_Count_IN, In_Price_Cost, In_Sum_Cost) =================
+  // ================= 3. หน้าสรุปยอดซื้อสินค้า (Summary_Purch_TB: SELECT In_Date, In_Bar, In_Menu, In_Qty, In_Price_Cost, In_Sum_Cost) =================
+  async recordPurchaseToSummaryPurch(purchase: PurchaseRecord): Promise<boolean> {
+    try {
+      const rows = purchase.items.map(item => ({
+        P_Date: purchase.date || new Date().toISOString().slice(0, 10),
+        P_Time: purchase.time || new Date().toTimeString().slice(0, 8),
+        In_Receipt: purchase.id,
+        In_Bar: item.barcode,
+        In_Menu: item.name,
+        In_Unit: item.unit || 'ชิ้น',
+        In_Qty: item.quantity,
+        In_Price_Cost: Math.round(item.price || 0),
+        P_Sum: Math.round(item.total || (item.quantity * item.price)),
+        P_Buyer: purchase.createdByName || 'ADMIN',
+      }));
+
+      const { error } = await supabase
+        .from('Summary_Purch_TB')
+        .insert(rows);
+
+      if (error) {
+        console.warn('Supabase recordPurchaseToSummaryPurch warning:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase recordPurchaseToSummaryPurch failed:', err);
+      return false;
+    }
+  }
+
+  async fetchSummaryPurchases(): Promise<PurchaseRecord[] | null> {
+    try {
+      const { data, error } = await supabase
+        .from('Summary_Purch_TB')
+        .select('*')
+        .order('P_ID', { ascending: false });
+
+      if (error) {
+        console.warn('Supabase fetchSummaryPurchases warning:', error.message);
+        return null;
+      }
+
+      if (data && data.length > 0) {
+        const map = new Map<string, {
+          purchaseId: string;
+          date: string;
+          time: string;
+          buyer: string;
+          items: CartItem[];
+          netTotal: number;
+        }>();
+
+        data.forEach((r: any) => {
+          const receipt = r.In_Receipt || ('PO-' + (r.P_Date || 'unknown') + '-' + r.P_ID);
+          const qty = Number(r.In_Qty) || 1;
+          const cost = Number(r.In_Price_Cost) || 0;
+          const sum = Number(r.P_Sum) || (qty * cost);
+
+          const item: CartItem = {
+            barcode: r.In_Bar || '',
+            name: r.In_Menu || '',
+            unit: r.In_Unit || 'ชิ้น',
+            price: cost,
+            quantity: qty,
+            total: sum,
+          };
+
+          if (!map.has(receipt)) {
+            map.set(receipt, {
+              purchaseId: receipt,
+              date: r.P_Date || new Date().toISOString().slice(0, 10),
+              time: r.P_Time || '00:00:00',
+              buyer: r.P_Buyer || 'ADMIN',
+              items: [item],
+              netTotal: sum,
+            });
+          } else {
+            const entry = map.get(receipt)!;
+            entry.items.push(item);
+            entry.netTotal += sum;
+          }
+        });
+
+        const records: PurchaseRecord[] = Array.from(map.values()).map(entry => ({
+          id: entry.purchaseId,
+          date: entry.date,
+          time: entry.time,
+          items: entry.items,
+          netTotal: entry.netTotal,
+          createdByName: entry.buyer,
+          createdByRole: entry.buyer === 'ADMIN' ? 'admin' : 'user',
+        }));
+
+        return records;
+      }
+      return [];
+    } catch (err) {
+      console.warn('Supabase fetchSummaryPurchases failed:', err);
+      return null;
+    }
+  }
+
+  async deleteSummaryPurchaseItem(receiptNumber: string, barcode: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('Summary_Purch_TB')
+        .delete()
+        .eq('In_Receipt', receiptNumber)
+        .eq('In_Bar', barcode);
+
+      if (error) {
+        console.warn('Supabase deleteSummaryPurchaseItem warning:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase deleteSummaryPurchaseItem failed:', err);
+      return false;
+    }
+  }
+
+  async deleteSummaryPurchaseReceipt(receiptNumber: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('Summary_Purch_TB')
+        .delete()
+        .eq('In_Receipt', receiptNumber);
+
+      if (error) {
+        console.warn('Supabase deleteSummaryPurchaseReceipt warning:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase deleteSummaryPurchaseReceipt failed:', err);
+      return false;
+    }
+  }
+
   async selectPurchaseSummaryRecords(): Promise<any[] | null> {
     try {
       const { data, error } = await supabase
         .from('Inventory_TB')
-        .select('In_Bar, In_Menu, In_Qty, In_Price_Cost, In_Sum_Cost, In_Status');
+        .select('In_Bar, In_Menu, In_Qty, In_Price_Cost, In_Sum_Cost, In_Count_Cost_IN, In_Status')
+        .not('In_Count_Cost_IN', 'is', null);
 
       if (error) {
         console.warn('Supabase selectPurchaseSummaryRecords warning:', error.message);
@@ -525,12 +665,13 @@ export class SupabaseService {
     try {
       // User requirement: หน้าสรุปยอดขายสินค้า จะใช้กับฐานข้อมูลที่ชื่อว่า Summary_Self_TB
       // ซึ่งระบบจะต้องทำการใช้คำสั่ง SELECT ในการเรียกดูของจากตาราง Inventory_TB มาวิเคราะห์ใส่ในตาราง
-      const rows: SummarySaleRow[] = sale.items.map(item => ({
-        S_Date: sale.date,
+      const rows = sale.items.map(item => ({
+        S_Date: sale.date || new Date().toISOString().slice(0, 10),
         In_Bar: item.barcode,
         In_Menu: item.name,
-        In_Qty: item.quantity,
-        S_Sum: item.total,
+        In_Qty: String(item.quantity),
+        In_Price_Self: Math.round(item.price || 0),
+        S_Sum: Math.round(item.total || (item.quantity * item.price)),
         In_Receipt: sale.receiptNumber,
       }));
 
@@ -549,17 +690,76 @@ export class SupabaseService {
     }
   }
 
-  async fetchSummarySales(): Promise<SummarySaleRow[] | null> {
+  async fetchSummarySales(): Promise<SaleRecord[] | null> {
     try {
       const { data, error } = await supabase
         .from('Summary_Self_TB')
-        .select('*');
+        .select('*')
+        .order('S_ID', { ascending: false });
 
       if (error) {
         console.warn('Supabase fetchSummarySales warning:', error.message);
         return null;
       }
-      return data;
+
+      if (data && data.length > 0) {
+        const map = new Map<string, {
+          receiptNumber: string;
+          date: string;
+          time: string;
+          cashier: string;
+          items: CartItem[];
+          netTotal: number;
+        }>();
+
+        data.forEach((r: any) => {
+          const receipt = r.In_Receipt || ('RC-' + (r.S_Date || 'unknown') + '-' + r.S_ID);
+          const qty = Number(r.In_Qty) || 1;
+          const sum = Number(r.S_Sum) || 0;
+          const price = Number(r.In_Price_Self) || (qty > 0 ? Math.round(sum / qty) : 0);
+
+          const item: CartItem = {
+            barcode: r.In_Bar || '',
+            name: r.In_Menu || '',
+            unit: 'ชิ้น',
+            price: price,
+            quantity: qty,
+            total: sum,
+          };
+
+          if (!map.has(receipt)) {
+            map.set(receipt, {
+              receiptNumber: receipt,
+              date: r.S_Date || new Date().toISOString().slice(0, 10),
+              time: '12:00:00',
+              cashier: 'ADMIN',
+              items: [item],
+              netTotal: sum,
+            });
+          } else {
+            const entry = map.get(receipt)!;
+            entry.items.push(item);
+            entry.netTotal += sum;
+          }
+        });
+
+        const records: SaleRecord[] = Array.from(map.values()).map(entry => ({
+          id: 'SL-REMOTE-' + entry.receiptNumber,
+          receiptNumber: entry.receiptNumber,
+          date: entry.date,
+          time: entry.time,
+          items: entry.items,
+          netTotal: entry.netTotal,
+          cashReceived: entry.netTotal,
+          change: 0,
+          bahtText: '',
+          createdByName: entry.cashier,
+          createdByRole: 'admin',
+        }));
+
+        return records;
+      }
+      return [];
     } catch (err) {
       console.warn('Supabase fetchSummarySales failed:', err);
       return null;

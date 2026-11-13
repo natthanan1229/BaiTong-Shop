@@ -187,6 +187,99 @@ class StoreService {
     return newRecord;
   }
 
+  savePurchases(purchases: PurchaseRecord[]): void {
+    localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(purchases));
+  }
+
+  async deletePurchaseItem(
+    purchaseId: string,
+    barcode: string,
+    qty: number,
+    deductStock: boolean = true
+  ): Promise<{ success: boolean; message: string }> {
+    const purchases = this.getPurchases();
+    const purchaseIndex = purchases.findIndex(p => p.id === purchaseId);
+    if (purchaseIndex === -1) {
+      return { success: false, message: 'ไม่พบรายการใบสั่งซื้อที่ระบุ' };
+    }
+
+    const purchase = purchases[purchaseIndex];
+    const itemIndex = purchase.items.findIndex(it => it.barcode === barcode);
+    if (itemIndex === -1) {
+      return { success: false, message: 'ไม่พบรายการสินค้านี้ในใบสั่งซื้อ' };
+    }
+
+    const item = purchase.items[itemIndex];
+    const actualQty = qty || item.quantity;
+    const itemName = item.name;
+
+    // 1. Deduct Inventory Stock (ปรับลดยอดรับเข้าออกจากคลังสินค้า)
+    if (deductStock) {
+      const products = this.getProducts();
+      const prod = products.find(p => p.barcode === barcode);
+      if (prod) {
+        prod.stockQty = Math.max(0, (prod.stockQty || 0) - actualQty);
+        prod.receivedQty = Math.max(0, (prod.receivedQty || 0) - actualQty);
+        this.saveProducts(products);
+        // Sync modified product to Supabase Inventory_TB
+        supabaseService.saveInventoryItem(prod).catch(() => {});
+      }
+    }
+
+    // 2. Remove or update purchase items
+    if (purchase.items.length <= 1) {
+      purchases.splice(purchaseIndex, 1);
+    } else {
+      purchase.items.splice(itemIndex, 1);
+      purchase.netTotal = purchase.items.reduce((s, it) => s + it.total, 0);
+    }
+    this.savePurchases(purchases);
+
+    // 3. Sync to Supabase Summary_Expans_TB
+    const currentProducts = this.getProducts();
+    supabaseService.syncExpenseFromInventory(currentProducts, purchases).catch(() => {});
+
+    return {
+      success: true,
+      message: `ลบรายการ "${itemName}" สำเร็จ (ปรับลดยอดรับเข้าคลัง ${actualQty} ชิ้นเรียบร้อย)`
+    };
+  }
+
+  async deletePurchaseRecord(
+    purchaseId: string,
+    deductStock: boolean = true
+  ): Promise<{ success: boolean; message: string }> {
+    const purchases = this.getPurchases();
+    const purchase = purchases.find(p => p.id === purchaseId);
+    if (!purchase) {
+      return { success: false, message: 'ไม่พบเลขที่ใบสั่งซื้อนี้' };
+    }
+
+    if (deductStock) {
+      const products = this.getProducts();
+      purchase.items.forEach(item => {
+        const prod = products.find(p => p.barcode === item.barcode);
+        if (prod) {
+          prod.stockQty = Math.max(0, (prod.stockQty || 0) - item.quantity);
+          prod.receivedQty = Math.max(0, (prod.receivedQty || 0) - item.quantity);
+          supabaseService.saveInventoryItem(prod).catch(() => {});
+        }
+      });
+      this.saveProducts(products);
+    }
+
+    const updated = purchases.filter(p => p.id !== purchaseId);
+    this.savePurchases(updated);
+
+    const currentProducts = this.getProducts();
+    supabaseService.syncExpenseFromInventory(currentProducts, updated).catch(() => {});
+
+    return {
+      success: true,
+      message: `ลบใบสั่งซื้อ "${purchaseId}" สำเร็จเรียบร้อย`
+    };
+  }
+
   // ------------------ SALES ------------------
   getSales(): SaleRecord[] {
     const data = localStorage.getItem(STORAGE_KEYS.SALES);

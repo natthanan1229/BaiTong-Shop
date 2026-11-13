@@ -121,6 +121,8 @@ export const App: React.FC = () => {
           {currentPage === 'purchase-summary' && (
             <PurchaseSummaryPage
               purchases={purchases}
+              session={session}
+              onRefresh={refreshData}
             />
           )}
 

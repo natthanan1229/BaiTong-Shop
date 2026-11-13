@@ -12,24 +12,32 @@ import {
   User as UserIcon, 
   ShieldCheck,
   Home,
-  Users
+  Users,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import { AuthSession } from '../types';
 
 interface HeaderProps {
   session: AuthSession;
   currentPage: string;
+  syncTime?: string;
+  isSyncing?: boolean;
   onNavigate: (page: string) => void;
   onLogout: () => void;
   onOpenSettings: () => void;
+  onManualSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   session,
   currentPage,
+  syncTime,
+  isSyncing,
   onNavigate,
   onLogout,
   onOpenSettings,
+  onManualSync,
 }) => {
   const isAdmin = session.role === 'admin';
 
@@ -59,6 +67,33 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Live Database Sync Status Indicator (BsitongProject) */}
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-medium shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="font-bold flex items-center gap-1">
+                <Database className="w-3 h-3 text-emerald-700" />
+                <span className="hidden md:inline">ฐานข้อมูล: </span>BsitongProject
+              </span>
+              {syncTime && (
+                <span className="text-emerald-700 font-mono text-[10px] hidden sm:inline">
+                  ({syncTime})
+                </span>
+              )}
+              {onManualSync && (
+                <button
+                  onClick={onManualSync}
+                  disabled={isSyncing}
+                  className="ml-0.5 p-0.5 hover:bg-emerald-200 text-emerald-800 rounded-full transition disabled:opacity-50"
+                  title="คลิกเพื่อซิงค์ข้อมูลกับฐานข้อมูล BsitongProject ทันที"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
+
             {isAdmin ? (
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#8d6e63] text-white font-medium text-xs shadow-xs">

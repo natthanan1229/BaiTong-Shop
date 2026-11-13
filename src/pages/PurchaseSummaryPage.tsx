@@ -12,7 +12,8 @@ import {
   Trash2,
   CheckCircle,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 import { PurchaseRecord, AuthSession } from '../types';
 import { ImageSlot } from '../components/ImageSlot';
@@ -38,6 +39,14 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  const handleManualRefresh = async () => {
+    setIsSyncing(true);
+    await store.triggerImmediateSync();
+    if (onRefresh) onRefresh();
+    setIsSyncing(false);
+  };
 
   // Flatten items for table display matching Excel Total Purchase Sheet & Supabase Summary_Purch_TB / Inventory_TB
   const allRows: Array<{
@@ -174,7 +183,31 @@ export const PurchaseSummaryPage: React.FC<PurchaseSummaryPageProps> = ({
         altText="ภาพหัวข้อสรุปยอดซื้อสินค้า"
       />
 
-      {/* Header Bar */}
+      {/* Live Operational Status Banner for ADMIN & Users */}
+      <div className="bg-gradient-to-r from-blue-50 via-teal-50 to-emerald-50 p-3 rounded-xl border border-blue-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-blue-900">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+          </span>
+          <span className="font-semibold">สถานะการทำงาน:</span>
+          <span>ระบบสรุปยอดซื้อเชื่อมต่อฐานข้อมูล BsitongProject (ตาราง Summary_Purch_TB & Inventory_TB)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-blue-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-blue-200">
+            แสดงข้อมูลทั้งหมด {allRows.length} รายการ (ซิงค์อัตโนมัติทุกเครื่อง)
+          </span>
+          <button
+            onClick={handleManualRefresh}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 text-[11px] font-semibold rounded-lg border border-blue-300 shadow-2xs transition active:scale-95 disabled:opacity-50"
+            title="กดเพื่อดึงข้อมูลล่าสุดจากฐานข้อมูล BsitongProject ทันที"
+          >
+            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'กำลังดึงข้อมูล...' : 'อัปเดตข้อมูลด่วน'}</span>
+          </button>
+        </div>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">

@@ -12,7 +12,8 @@ import {
   Trash2,
   CheckCircle,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 import { SaleRecord, AuthSession } from '../types';
 import { ImageSlot } from '../components/ImageSlot';
@@ -37,6 +38,14 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  const handleManualRefresh = async () => {
+    setIsSyncing(true);
+    await store.triggerImmediateSync();
+    if (onRefresh) onRefresh();
+    setIsSyncing(false);
+  };
 
   // Flatten items for table display matching Excel Total Sales Sheet & Supabase Summary_Self_TB
   const allRows: Array<{
@@ -215,6 +224,32 @@ export const SalesSummaryPage: React.FC<SalesSummaryPageProps> = ({
           >
             <Printer className="w-3.5 h-3.5" />
             <span>พิมพ์รายงาน</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Live Operational Status Banner for ADMIN & Users */}
+      <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-emerald-50 p-3 rounded-xl border border-purple-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-purple-900">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500"></span>
+          </span>
+          <span className="font-semibold">สถานะการทำงาน:</span>
+          <span>ระบบสรุปยอดขายเชื่อมต่อฐานข้อมูล BsitongProject (ตาราง Summary_Self_TB & Inventory_TB)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-purple-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-purple-200">
+            แสดงข้อมูลทั้งหมด {allRows.length} รายการ (ซิงค์อัตโนมัติทุกเครื่อง)
+          </span>
+          <button
+            onClick={handleManualRefresh}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-purple-100 text-purple-800 text-[11px] font-semibold rounded-lg border border-purple-300 shadow-2xs transition active:scale-95 disabled:opacity-50"
+            title="กดเพื่อดึงข้อมูลล่าสุดจากฐานข้อมูล BsitongProject ทันที"
+          >
+            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'กำลังดึงข้อมูล...' : 'อัปเดตข้อมูลด่วน'}</span>
           </button>
         </div>
       </div>

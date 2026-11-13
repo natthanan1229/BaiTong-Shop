@@ -39,6 +39,7 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
 
   // Completed receipt modal state
   const [completedSale, setCompletedSale] = useState<SaleRecord | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const netTotal = cartItems.reduce((sum, item) => sum + item.total, 0);
   const numericCash = typeof cashReceived === 'number' ? cashReceived : 0;
@@ -147,35 +148,42 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
   };
 
   // Complete Sale
-  const handleCheckout = () => {
-    if (cartItems.length === 0) return;
+  const handleCheckout = async () => {
+    if (cartItems.length === 0 || isSaving) return;
 
     if (numericCash < netTotal) {
       alert(`จำนวนเงินที่รับมา (฿${numericCash}) น้อยกว่าราคาสุทธิ (฿${netTotal}) ขาดอีก ฿${(netTotal - numericCash).toFixed(2)} บาท`);
       return;
     }
 
+    setIsSaving(true);
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
     const timeStr = now.toTimeString().slice(0, 8);
 
-    const saleRecord = store.addSale({
-      date: dateStr,
-      time: timeStr,
-      items: cartItems,
-      netTotal,
-      cashReceived: numericCash,
-      change,
-      bahtText: thaiBaht,
-      createdByName: session.role === 'admin' ? 'ADMIN' : (session.user?.fullName || 'แคชเชียร์'),
-      createdByRole: session.role || 'user',
-    });
+    try {
+      const saleRecord = await store.addSale({
+        date: dateStr,
+        time: timeStr,
+        items: cartItems,
+        netTotal,
+        cashReceived: numericCash,
+        change,
+        bahtText: thaiBaht,
+        createdByName: session.role === 'admin' ? 'ADMIN' : (session.user?.fullName || 'แคชเชียร์'),
+        createdByRole: session.role || 'user',
+      });
 
-    playBeep('cash');
-    setCompletedSale(saleRecord);
-    setCartItems([]);
-    setCashReceived('');
-    onRefresh();
+      playBeep('cash');
+      setCompletedSale(saleRecord);
+      setCartItems([]);
+      setCashReceived('');
+      onRefresh();
+    } catch (err: any) {
+      alert('เกิดข้อผิดพลาดในการบันทึกการขายลงฐานข้อมูล BsitongProject: ' + (err?.message || ''));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -214,6 +222,21 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>พร้อมขาย ({session.role === 'admin' ? 'ADMIN' : session.user?.fullName})</span>
           </div>
+        </div>
+      </div>
+
+      {/* Live Operational Status Banner for ADMIN & Cashier */}
+      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-3 rounded-xl border border-emerald-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-emerald-900">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span className="font-semibold">สถานะการทำงาน:</span>
+          <span>ระบบขายหน้าร้าน POS พร้อมใช้งาน (ระบบฐานข้อมูล BsitongProject ออนไลน์)</span>
+        </div>
+        <div className="text-[11px] text-emerald-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+          เมื่อชำระเงิน ยอดขายจะซิงค์และตัดสต็อกลงฐานข้อมูลกลางทันที ทุกเครื่องจะเห็นพร้อมกัน
         </div>
       </div>
 
@@ -483,16 +506,16 @@ export const SalesPosPage: React.FC<SalesPosPageProps> = ({
             {/* Submit Payment Button */}
             <button
               type="button"
-              disabled={cartItems.length === 0 || numericCash < netTotal}
+              disabled={cartItems.length === 0 || numericCash < netTotal || isSaving}
               onClick={handleCheckout}
               className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 ${
-                cartItems.length === 0 || numericCash < netTotal
+                cartItems.length === 0 || numericCash < netTotal || isSaving
                   ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                   : 'bg-[#8d6e63] hover:bg-[#5d4037] text-white active:scale-[0.99]'
               }`}
             >
-              <CreditCard className="w-5 h-5" />
-              <span>ชำระเงินและตัดสต็อก (Print Receipt)</span>
+              <CreditCard className={`w-5 h-5 ${isSaving ? 'animate-spin' : ''}`} />
+              <span>{isSaving ? 'กำลังบันทึกลงฐานข้อมูล BsitongProject...' : 'ชำระเงินและตัดสต็อก (ทุกเครื่องเห็นพร้อมกัน)'}</span>
             </button>
           </div>
         </div>

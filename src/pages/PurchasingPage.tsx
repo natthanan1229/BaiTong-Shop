@@ -35,6 +35,7 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [scanMessage, setScanMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isSuccessSaved, setIsSuccessSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [supabaseItems, setSupabaseItems] = useState<{ barcode: string; name: string; price: number }[]>([]);
 
   React.useEffect(() => {
@@ -132,27 +133,34 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
 
   const netTotal = cartItems.reduce((sum, item) => sum + item.total, 0);
 
-  const handleSavePurchase = () => {
-    if (cartItems.length === 0) return;
+  const handleSavePurchase = async () => {
+    if (cartItems.length === 0 || isSaving) return;
 
+    setIsSaving(true);
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
     const timeStr = now.toTimeString().slice(0, 8);
 
-    store.addPurchase({
-      date: dateStr,
-      time: timeStr,
-      items: cartItems,
-      netTotal,
-      createdByName: session.role === 'admin' ? 'ADMIN' : (session.user?.fullName || 'ผู้ใช้งาน'),
-      createdByRole: session.role || 'user',
-    });
+    try {
+      await store.addPurchase({
+        date: dateStr,
+        time: timeStr,
+        items: cartItems,
+        netTotal,
+        createdByName: session.role === 'admin' ? 'ADMIN' : (session.user?.fullName || 'ผู้ใช้งาน'),
+        createdByRole: session.role || 'user',
+      });
 
-    playBeep('cash');
-    setIsSuccessSaved(true);
-    setCartItems([]);
-    onRefresh();
-    setTimeout(() => setIsSuccessSaved(false), 4000);
+      playBeep('cash');
+      setIsSuccessSaved(true);
+      setCartItems([]);
+      onRefresh();
+      setTimeout(() => setIsSuccessSaved(false), 5000);
+    } catch (err: any) {
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลลงฐานข้อมูล BsitongProject: ' + (err?.message || ''));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -194,13 +202,28 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
         </button>
       </div>
 
+      {/* Live Operational Status Banner for ADMIN & Users */}
+      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-3 rounded-xl border border-emerald-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-emerald-900">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span className="font-semibold">สถานะการทำงาน:</span>
+          <span>พร้อมบันทึกรับสินค้าเข้าคลัง (ระบบฐานข้อมูล BsitongProject ออนไลน์)</span>
+        </div>
+        <div className="text-[11px] text-emerald-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+          ข้อมูลที่บันทึกจะซิงค์และปรากฏบนทุกเครื่องทันที
+        </div>
+      </div>
+
       {isSuccessSaved && (
         <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
             <div>
               <div className="font-bold text-sm">บันทึกรับสินค้าเข้าคลังสำเร็จ!</div>
-              <div>ยอดสินค้าถูกเพิ่มเข้าสู่ระบบคลังสินค้า และบันทึกลงในสรุปยอดซื้อเรียบร้อยแล้ว</div>
+              <div>ยอดสินค้าถูกเพิ่มเข้าสู่ระบบคลังสินค้า และบันทึกลงฐานข้อมูลกลาง BsitongProject เรียบร้อยแล้ว (ปรากฏบนทุกเครื่องทันที)</div>
             </div>
           </div>
           <button
@@ -417,10 +440,13 @@ export const PurchasingPage: React.FC<PurchasingPageProps> = ({
 
               <button
                 onClick={handleSavePurchase}
-                className="px-6 py-2.5 bg-[#2e7d32] hover:bg-[#1b5e20] text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2"
+                disabled={isSaving}
+                className={`px-6 py-2.5 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2 ${
+                  isSaving ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#2e7d32] hover:bg-[#1b5e20] active:scale-95'
+                }`}
               >
-                <PackagePlus className="w-4 h-4" />
-                <span>บันทึกรับสินค้าเข้าคลัง</span>
+                <PackagePlus className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+                <span>{isSaving ? 'กำลังบันทึกลงฐานข้อมูล BsitongProject...' : 'บันทึกรับสินค้าเข้าคลัง (ทุกเครื่องเห็นพร้อมกัน)'}</span>
               </button>
             </div>
           </div>

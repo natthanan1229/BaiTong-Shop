@@ -24,12 +24,22 @@ export const App: React.FC = () => {
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [syncTime, setSyncTime] = useState<string>(() => store.getLastSyncTime());
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   const refreshData = () => {
     setProducts(store.getProducts());
     setPurchases(store.getPurchases());
     setSales(store.getSales());
     setExpenses(store.getExpenses());
+    setSyncTime(store.getLastSyncTime());
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    await store.triggerImmediateSync();
+    refreshData();
+    setIsSyncing(false);
   };
 
   useEffect(() => {
@@ -54,12 +64,21 @@ export const App: React.FC = () => {
     window.addEventListener('sales-updated', handleSyncEvent);
     window.addEventListener('data-refreshed', handleSyncEvent);
 
-    // 4. Periodic cloud sync every 4 seconds (ensures cross-device consistency)
+    // 4. Focus and tab visibility: refresh immediately when user opens/returns to tab
+    const handleVisibilitySync = () => {
+      if (!document.hidden) {
+        store.syncWithSupabase().then(() => refreshData());
+      }
+    };
+    window.addEventListener('focus', handleVisibilitySync);
+    document.addEventListener('visibilitychange', handleVisibilitySync);
+
+    // 5. Periodic cloud sync every 3 seconds (ensures cross-device consistency)
     const interval = setInterval(() => {
       store.syncWithSupabase().then(() => {
         refreshData();
       });
-    }, 4000);
+    }, 3000);
 
     return () => {
       unsubscribe();
@@ -67,6 +86,8 @@ export const App: React.FC = () => {
       window.removeEventListener('purchases-updated', handleSyncEvent);
       window.removeEventListener('sales-updated', handleSyncEvent);
       window.removeEventListener('data-refreshed', handleSyncEvent);
+      window.removeEventListener('focus', handleVisibilitySync);
+      document.removeEventListener('visibilitychange', handleVisibilitySync);
       clearInterval(interval);
     };
   }, [session]);
@@ -96,9 +117,12 @@ export const App: React.FC = () => {
         <Header
           session={session}
           currentPage={currentPage}
+          syncTime={syncTime}
+          isSyncing={isSyncing}
           onNavigate={(page) => setCurrentPage(page)}
           onLogout={handleLogout}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onManualSync={handleManualSync}
         />
 
         <main className="max-w-7xl mx-auto px-4 py-6">

@@ -16,9 +16,30 @@ const STORAGE_KEYS = {
 
 class StoreService {
   private isInitialized = false;
+  private lastSyncTime: string = new Date().toLocaleTimeString('th-TH');
+  private isOnline: boolean = true;
+  private isSyncing: boolean = false;
+
+  getLastSyncTime(): string {
+    return this.lastSyncTime;
+  }
+
+  isDatabaseOnline(): boolean {
+    return this.isOnline;
+  }
+
+  isSyncInProgress(): boolean {
+    return this.isSyncing;
+  }
+
+  async triggerImmediateSync(): Promise<void> {
+    await this.syncWithSupabase();
+    window.dispatchEvent(new CustomEvent('data-refreshed'));
+  }
 
   // Initialize and sync with Supabase tables on load
   async syncWithSupabase(): Promise<void> {
+    this.isSyncing = true;
     try {
       // 1. Fetch Inventory_TB from Supabase
       const remoteProducts = await supabaseService.fetchInventory();
@@ -34,28 +55,14 @@ class StoreService {
 
       // 2. Fetch Summary_Purch_TB from Supabase (Purchases sync across all machines)
       const remotePurchases = await supabaseService.fetchSummaryPurchases();
-      if (remotePurchases !== null && remotePurchases.length > 0) {
+      if (remotePurchases !== null) {
         this.savePurchases(remotePurchases);
-      } else {
-        const localPurchases = this.getPurchases();
-        if (localPurchases.length > 0) {
-          for (const p of localPurchases) {
-            await supabaseService.recordPurchaseToSummaryPurch(p);
-          }
-        }
       }
 
       // 3. Fetch Summary_Self_TB from Supabase (Sales sync across all machines)
       const remoteSales = await supabaseService.fetchSummarySales();
-      if (remoteSales !== null && remoteSales.length > 0) {
+      if (remoteSales !== null) {
         this.saveSales(remoteSales);
-      } else {
-        const localSales = this.getSales();
-        if (localSales.length > 0) {
-          for (const s of localSales) {
-            await supabaseService.recordSaleToSummarySelf(s);
-          }
-        }
       }
 
       // 4. Fetch Employee_TB from Supabase
@@ -112,14 +119,20 @@ class StoreService {
                 window.dispatchEvent(new CustomEvent('users-updated'));
               }
             }
+            this.lastSyncTime = new Date().toLocaleTimeString('th-TH');
             window.dispatchEvent(new CustomEvent('data-refreshed'));
           })
           .subscribe();
       }
 
+      this.isOnline = true;
+      this.lastSyncTime = new Date().toLocaleTimeString('th-TH');
       this.isInitialized = true;
     } catch (err) {
       console.warn('Supabase sync note:', err);
+      this.isOnline = false;
+    } finally {
+      this.isSyncing = false;
     }
   }
 
@@ -272,18 +285,20 @@ class StoreService {
     }
   }
 
-  addPurchase(purchase: Omit<PurchaseRecord, 'id'>): PurchaseRecord {
+  async addPurchase(purchase: Omit<PurchaseRecord, 'id'>): Promise<PurchaseRecord> {
     const purchases = this.getPurchases();
     const newRecord: PurchaseRecord = {
       ...purchase,
       id: 'PO-' + Date.now(),
     };
     const updated = [newRecord, ...purchases];
-    localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(updated));
+    this.savePurchases(updated);
 
     // Update Inventory Stock (Rule 1 & 2: In_Count_Cost_IN & In_Sum_Cost)
     const products = this.getProducts();
     const config = this.getFormulaConfig();
+    const promises: Promise<any>[] = [];
+
     purchase.items.forEach(item => {
       const prod = products.find(p => p.barcode === item.barcode);
       if (prod) {
@@ -302,16 +317,28 @@ class StoreService {
         prod.stockTotal = prod.sumStock;
 
         // Sync each modified item to Supabase Inventory_TB
-        supabaseService.saveInventoryItem(prod).catch(() => {});
+        promises.push(supabaseService.saveInventoryItem(prod));
       }
     });
     this.saveProducts(products);
 
-    // Sync to Supabase Summary_Expans_TB (วิเคราะห์ค่าใช้จ่ายจาก Inventory_TB และยอดซื้อ)
-    supabaseService.syncExpenseFromInventory(products, updated).catch(() => {});
-
     // Sync to Supabase Summary_Purch_TB (บันทึกยอดซื้อสินค้าเพื่อให้ทุกเครื่องเห็นข้อมูลตรงกัน)
-    supabaseService.recordPurchaseToSummaryPurch(newRecord).catch(() => {});
+    promises.push(supabaseService.recordPurchaseToSummaryPurch(newRecord));
+
+    // Sync to Supabase Summary_Expans_TB (วิเคราะห์ค่าใช้จ่ายจาก Inventory_TB และยอดซื้อ)
+    promises.push(supabaseService.syncExpenseFromInventory(products, updated));
+
+    // Await all database operations to ensure data is firmly written to Supabase BsitongProject!
+    try {
+      await Promise.all(promises);
+    } catch (e) {
+      console.warn('addPurchase db sync note:', e);
+    }
+
+    this.lastSyncTime = new Date().toLocaleTimeString('th-TH');
+    window.dispatchEvent(new CustomEvent('purchases-updated'));
+    window.dispatchEvent(new CustomEvent('inventory-updated'));
+    window.dispatchEvent(new CustomEvent('data-refreshed'));
 
     return newRecord;
   }
@@ -475,7 +502,7 @@ class StoreService {
     }
   }
 
-  addSale(sale: Omit<SaleRecord, 'id' | 'receiptNumber'>): SaleRecord {
+  async addSale(sale: Omit<SaleRecord, 'id' | 'receiptNumber'>): Promise<SaleRecord> {
     const sales = this.getSales();
     const receiptNumber = 'RC' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + (sales.length + 1).toString().padStart(4, '0');
     const newRecord: SaleRecord = {
@@ -484,11 +511,13 @@ class StoreService {
       receiptNumber,
     };
     const updated = [newRecord, ...sales];
-    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(updated));
+    this.saveSales(updated);
 
     // Deduct Inventory Stock (Rule 3 & 4: In_Count_Self & In_Sum_Self)
     const products = this.getProducts();
     const config = this.getFormulaConfig();
+    const promises: Promise<any>[] = [];
+
     sale.items.forEach(item => {
       const prod = products.find(p => p.barcode === item.barcode);
       if (prod) {
@@ -518,13 +547,25 @@ class StoreService {
         prod.stockTotal = prod.sumStock;
 
         // Sync item update to Supabase Inventory_TB
-        supabaseService.saveInventoryItem(prod).catch(() => {});
+        promises.push(supabaseService.saveInventoryItem(prod));
       }
     });
     this.saveProducts(products);
 
     // Sync to Supabase Summary_Self_TB (บันทึกยอดขายสินค้าโดยวิเคราะห์จาก Inventory_TB)
-    supabaseService.recordSaleToSummarySelf(newRecord).catch(() => {});
+    promises.push(supabaseService.recordSaleToSummarySelf(newRecord));
+
+    // Await all database operations to ensure data is firmly written to Supabase BsitongProject!
+    try {
+      await Promise.all(promises);
+    } catch (e) {
+      console.warn('addSale db sync note:', e);
+    }
+
+    this.lastSyncTime = new Date().toLocaleTimeString('th-TH');
+    window.dispatchEvent(new CustomEvent('sales-updated'));
+    window.dispatchEvent(new CustomEvent('inventory-updated'));
+    window.dispatchEvent(new CustomEvent('data-refreshed'));
 
     return newRecord;
   }
